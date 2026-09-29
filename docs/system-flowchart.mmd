@@ -1,0 +1,47 @@
+flowchart TD
+    A[Pengunjung] --> B[Halaman Utama / Landing Page]
+    B --> C[Melihat katalog produk]
+    C --> D[Detail produk]
+
+    subgraph Buyer[Alur Pembeli]
+        D --> E{Sudah login?}
+        E -- Tidak --> F[Login / Register User]
+        F --> G[Dashboard Pembeli]
+        E -- Ya --> G
+        G --> H[Tambah ke keranjang]
+        H --> I[Checkout]
+        I --> J[Validasi stok dan status seller]
+        J --> K[buat order per seller]
+        K --> L[Generate Virtual Account DOKU]
+        L --> M[Halaman pembayaran]
+        M --> N{Pembayaran diterima?}
+        N -- Ya --> O[Update status pembayaran menjadi paid]
+        O --> P[Kurangi stok produk]
+        P --> Q[Hapus item dari keranjang]
+        Q --> R[Catat sidik jari pesanan ke kontrak OrderRegistry di Base]
+        R --> S[Riwayat pesanan]
+        N -- Tidak --> T[Status pending / failed]
+        T --> U[Cek status pembayaran via webhook atau inquiry]
+        U --> V[Update status order]
+        V --> S
+    end
+
+    subgraph Seller[Alur Seller]
+        W[Seller mendaftar / login] --> X[Dashboard Seller]
+        X --> Y[Kelola produk]
+        Y --> Z[Tambah / edit / hapus produk]
+        Z --> AA[Upload gambar produk]
+        AA --> AB[Aktivasi akun DOKU]
+        AB --> AC[Terima pembayaran dari pembeli]
+    end
+
+    subgraph Public[Alur Publik dan Transparansi]
+        AD[Verifikasi transaksi blockchain] --> AE[Halaman publik transaksi]
+        AE --> AF[Detail hash transaksi]
+        AG[Halaman bantuan] --> AH[Form bantuan / support]
+    end
+
+    B --> AD
+    B --> AG
+    W --> X
+    G --> S
