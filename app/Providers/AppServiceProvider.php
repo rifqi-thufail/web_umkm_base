@@ -11,7 +11,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Without this the container would autowire a bare Guzzle client (no timeout).
+        $this->app->bind(\App\Services\CoinbaseWalletService::class, fn () => new \App\Services\CoinbaseWalletService());
     }
 
     /**
