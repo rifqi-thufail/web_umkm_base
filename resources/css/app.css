@@ -1,13 +1,16 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "@fontsource-variable/figtree";
+@import "@fontsource-variable/schibsted-grotesk";
+@import "@fontsource-variable/jetbrains-mono";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-heading: 'Schibsted Grotesk', 'Figtree', ui-sans-serif, system-ui, sans-serif;
-    --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif;
-    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-heading: 'Schibsted Grotesk Variable', 'Figtree Variable', ui-sans-serif, system-ui, sans-serif;
+    --font-sans: 'Figtree Variable', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
     --color-chain: var(--chain);
     --color-chain-foreground: var(--chain-foreground);
     --color-chain-muted: var(--chain-muted);

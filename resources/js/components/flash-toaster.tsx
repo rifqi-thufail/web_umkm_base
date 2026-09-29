@@ -1,18 +1,24 @@
 import { usePage } from '@inertiajs/react';
-import { useEffect } from 'react';
-import { toast } from 'sonner';
-import { Toaster } from '@/components/ui/sonner';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { SharedProps } from '@/types';
+
+// sonner is ~22 kB gzipped and only needed once a flash message exists, so keep it off the initial bundle.
+const FlashToasts = lazy(() => import('@/components/flash-toasts'));
 
 export function FlashToaster() {
     const { flash } = usePage<SharedProps>().props;
+    const hasFlash = Boolean(flash.success || flash.error || flash.warning || flash.info);
+    const [loaded, setLoaded] = useState(hasFlash);
 
     useEffect(() => {
-        if (flash.success) toast.success(flash.success);
-        if (flash.error) toast.error(flash.error);
-        if (flash.warning) toast.warning(flash.warning);
-        if (flash.info) toast.info(flash.info);
-    }, [flash]);
+        if (hasFlash) setLoaded(true);
+    }, [hasFlash]);
 
-    return <Toaster position="top-center" richColors closeButton />;
+    if (!loaded) return null;
+
+    return (
+        <Suspense fallback={null}>
+            <FlashToasts flash={flash} />
+        </Suspense>
+    );
 }

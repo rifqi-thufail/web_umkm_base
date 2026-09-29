@@ -1,37 +1,24 @@
-import { Link, router, usePage } from '@inertiajs/react';
-import { HeartIcon, LayoutDashboardIcon, LogOutIcon, MenuIcon, PackageIcon, ShoppingBagIcon, StoreIcon, UserIcon } from 'lucide-react';
+import { Link, usePage } from '@inertiajs/react';
+import { MenuIcon, ShoppingBagIcon, StoreIcon } from 'lucide-react';
+import { lazy, Suspense, useState } from 'react';
 import { Brand } from '@/components/brand';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuGroup,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Separator } from '@/components/ui/separator';
-import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { initials } from '@/lib/format';
+import { AccountButton } from '@/components/site-header-account-button';
+import { isActive, NAV } from '@/lib/nav';
 import { cn } from '@/lib/utils';
 import type { SharedProps } from '@/types';
 
-const NAV = [
-    { label: 'Katalog', route: 'home' },
-    { label: 'Transparansi', route: 'public.transactions.index' },
-    { label: 'Verifikasi', route: 'blockchain.verify' },
-    { label: 'Bantuan', route: 'help.index' },
-] as const;
-
-function isActive(name: string) {
-    return route().current(name) || route().current(`${name}.*`);
-}
+// Radix dropdown/dialog code is only needed after login or when the mobile menu opens.
+const AccountMenu = lazy(() => import('@/components/site-header-menus').then((m) => ({ default: m.AccountMenu })));
+const MobileNav = lazy(() => import('@/components/site-header-menus').then((m) => ({ default: m.MobileNav })));
 
 export function SiteHeader() {
     const { auth, cartCount } = usePage<SharedProps>().props;
     const user = auth.user;
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [menuLoaded, setMenuLoaded] = useState(false);
+    // A click on the placeholder before the dropdown chunk arrives opens the menu once it loads.
+    const [accountClicked, setAccountClicked] = useState(false);
 
     return (
         <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/75">
@@ -68,49 +55,9 @@ export function SiteHeader() {
                     )}
 
                     {user ? (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="gap-2 pr-1.5 pl-1" aria-label="Menu akun">
-                                    <Avatar className="size-6">
-                                        {user.avatar && <AvatarImage src={user.avatar} alt="" />}
-                                        <AvatarFallback className="text-[10px]">{initials(user.name)}</AvatarFallback>
-                                    </Avatar>
-                                    <span className="hidden max-w-32 truncate text-sm sm:inline">{user.name}</span>
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56">
-                                <DropdownMenuLabel className="truncate font-normal text-muted-foreground">{user.email}</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuGroup>
-                                    <DropdownMenuItem asChild>
-                                        <Link href={route('dashboard')}>
-                                            <LayoutDashboardIcon /> Ringkasan
-                                        </Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem asChild>
-                                        <Link href={route('orders.index')}>
-                                            <PackageIcon /> Riwayat pesanan
-                                        </Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem asChild>
-                                        <Link href={route('wishlist.index')}>
-                                            <HeartIcon /> Wishlist
-                                        </Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem asChild>
-                                        <Link href={route('profile.edit')}>
-                                            <UserIcon /> Profil
-                                        </Link>
-                                    </DropdownMenuItem>
-                                </DropdownMenuGroup>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuGroup>
-                                    <DropdownMenuItem onSelect={() => router.post(route('logout'))}>
-                                        <LogOutIcon /> Keluar
-                                    </DropdownMenuItem>
-                                </DropdownMenuGroup>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        <Suspense fallback={<AccountButton user={user} onClick={() => setAccountClicked(true)} />}>
+                            <AccountMenu user={user} defaultOpen={accountClicked} />
+                        </Suspense>
                     ) : auth.seller ? (
                         <Button size="sm" variant="outline" asChild>
                             <Link href={route('seller.dashboard')}>
@@ -129,38 +76,23 @@ export function SiteHeader() {
                         </>
                     )}
 
-                    <Sheet>
-                        <SheetTrigger asChild>
-                            <Button variant="ghost" size="icon" className="md:hidden" aria-label="Buka menu">
-                                <MenuIcon />
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent side="right" className="w-72">
-                            <SheetHeader>
-                                <SheetTitle className="text-left">Menu</SheetTitle>
-                            </SheetHeader>
-                            <nav aria-label="Menu seluler" className="flex flex-col px-4">
-                                {NAV.map((item) => (
-                                    <SheetClose asChild key={item.route}>
-                                        <Link
-                                            href={route(item.route)}
-                                            className={cn('rounded-md py-2.5 text-base', isActive(item.route) ? 'font-medium' : 'text-muted-foreground')}
-                                        >
-                                            {item.label}
-                                        </Link>
-                                    </SheetClose>
-                                ))}
-                                <Separator className="my-3" />
-                                {!user && !auth.seller && (
-                                    <SheetClose asChild>
-                                        <Link href={route('seller.register')} className="py-2.5 text-base text-muted-foreground">
-                                            Buka toko di AMPUH
-                                        </Link>
-                                    </SheetClose>
-                                )}
-                            </nav>
-                        </SheetContent>
-                    </Sheet>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="md:hidden"
+                        aria-label="Buka menu"
+                        onClick={() => {
+                            setMenuLoaded(true);
+                            setMenuOpen(true);
+                        }}
+                    >
+                        <MenuIcon />
+                    </Button>
+                    {menuLoaded && (
+                        <Suspense fallback={null}>
+                            <MobileNav open={menuOpen} onOpenChange={setMenuOpen} showSellerLink={!user && !auth.seller} />
+                        </Suspense>
+                    )}
                 </div>
             </div>
         </header>
