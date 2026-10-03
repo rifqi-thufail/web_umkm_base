@@ -17,6 +17,12 @@ class WalletFund extends Command
 
     public function handle(): int
     {
+        if (app()->isProduction()) {
+            $this->error('wallet:fund is for the local anvil chain only.');
+
+            return self::FAILURE;
+        }
+
         $who = $this->argument('who');
         $address = str_starts_with($who, '0x') ? $who : User::where('email', $who)->value('wallet_address');
         if (! $address) {

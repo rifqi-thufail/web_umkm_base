@@ -67,7 +67,7 @@ Route::middleware('auth:web')->group(function () {
     Route::get('/riwayat-pesanan/{order}', [OrderController::class, 'show'])->name('orders.show');
 
     Route::get('/wallet', [WalletController::class, 'index'])->name('wallet.index');
-    Route::post('/wallet/send', [WalletController::class, 'send'])->name('wallet.send');
+    Route::post('/wallet/send', [WalletController::class, 'send'])->middleware('throttle:wallet-send')->name('wallet.send');
 });
 
 // --- Penjual ---

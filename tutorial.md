@@ -12,6 +12,8 @@ Laravel ──HTTP──▶ mpc/signer ──NATS──▶ node0 · node1 · nod
    └── balance ───────┴── broadcast ──▶ anvil (local Base Sepolia, :8545)
 ```
 
+Every request to the nodes needs two signatures: the signer's, and Laravel's **authorizer** signature. Laravel only adds its signature after rebuilding the transaction itself and checking it against limits, so the signer on its own can't move funds. See [mpc/PRODUCTION.md](mpc/PRODUCTION.md) for the full security model.
+
 ## 1. Prerequisites
 
 | Tool | Check | Install |
@@ -57,27 +59,28 @@ npm run mpc:setup
 
 This command:
 
-1. Builds the `mpcium` and `mpcium-cli` binaries into `mpc/bin/` (the first run takes a few minutes)
-2. Starts NATS and Consul in Docker
-3. Generates 3 node identities, the shared chain code, and the event-initiator key (the key Laravel's signer uses to authorize requests)
-4. Registers the peers in Consul and installs the signer's npm packages
+1. Builds the `mpcium` and `mpcium-cli` binaries into `mpc/bin/` from a pinned commit (the first run takes a few minutes)
+2. Starts NATS (password-protected, with per-role permissions) and Consul in Docker, listening on `127.0.0.1` only
+3. Generates 3 node identities, a separate share-store password for each node, the chain code, and the event-initiator key (used by the signer)
+4. Generates **Laravel's authorizer key** and the **signer token**, and writes both to your `.env` (`MPC_AUTHORIZER_KEY`, `MPC_SIGNER_TOKEN`) if they're empty
+5. Registers the peers in Consul and installs the signer's npm packages (`npm ci`)
 
-Everything it generates goes in `mpc/cluster/`, which is git-ignored. **Never commit that folder.** It holds the node key shares.
+Everything it generates goes in `mpc/cluster/` (mode `700`), which is git-ignored. **Never commit that folder.** It holds the node key shares. The signer reads only `mpc/cluster/signer.env`, never Laravel's `.env`, so it never sees the authorizer key.
+
+> **Upgrading a cluster made by an older version of this script?** Just run `npm run mpc:setup` again. It exports the Consul registry (wallet key metadata) to `mpc/cluster/consul-kv-backup-*.json`, replaces the old containers (keeping their volumes), restores the registry, and keeps your existing share-store password. Then restart `npm run dev:mpc`.
 
 ## 4. Configure `.env`
 
-Turn on MPC wallets and set a random signer token:
-
-```bash
-openssl rand -hex 24
-```
+Turn on MPC wallets. `MPC_SIGNER_TOKEN` and `MPC_AUTHORIZER_KEY` were already filled in by the setup step:
 
 ```dotenv
 MPC_WALLET_ENABLED=true
 MPC_SIGNER_URL=http://127.0.0.1:7077
-MPC_SIGNER_PORT=7077
-MPC_SIGNER_TOKEN=paste-the-random-value-here
-MPC_WALLET_PREFIX=ampuh-user
+
+# Transfer policy that Laravel enforces before co-signing
+MPC_LIMIT_PER_TRANSFER_ETH=1
+MPC_LIMIT_DAILY_ETH=2
+MPC_MAX_FEE_GWEI=50
 
 # The local chain (the defaults are already correct)
 BASE_RPC_URL=http://127.0.0.1:8545
@@ -101,7 +104,7 @@ This starts six processes with color-coded output:
 | Name | What it runs |
 |---|---|
 | `server` | Laravel at http://127.0.0.1:8000 |
-| `queue` | queue worker, which creates wallets after signup |
+| `queue` | queue worker, which creates wallets after signup and signs transfers |
 | `logs` | `php artisan pail` |
 | `vite` | frontend dev server |
 | `chain` | anvil on `:8545` |
@@ -109,11 +112,13 @@ This starts six processes with color-coded output:
 
 Wait until the `mpc` output shows `[READY] Node is ready` from all three nodes and `[signer] listening on http://127.0.0.1:7077`. Each node spends about 20–30 seconds on first boot generating pre-parameters.
 
-To check that the signer is up (`$MPC_SIGNER_TOKEN` is the value from `.env`):
+To check that the signer is up:
 
 ```bash
-curl -s localhost:7077/health -H "Authorization: Bearer $MPC_SIGNER_TOKEN"
+curl -s localhost:7077/health
 ```
+
+`dev:all` doesn't run the scheduler. In production, run `php artisan schedule:work` (or cron) so `wallet:reconcile` can settle transfers whose outcome was lost.
 
 ## 6. Create two buyers
 
@@ -143,15 +148,17 @@ On A's `/wallet` page, fill in **Kirim ETH**:
 |---|---|
 | Penerima | user B's **email** (or any `0x…` address) |
 | Jumlah (ETH) | `0.25` |
+| Kata sandi akun | A's password |
 
 Click **Kirim**. Behind the scenes:
 
-1. Laravel checks the balance and records a pending `wallet_transfers` row.
-2. The signer builds the transaction (nonce, gas, chain ID from anvil) and sends its hash to the cluster.
-3. Two of the three Mpcium nodes run threshold ECDSA and return `(r, s, v)`. The signer checks that the signature recovers to A's address.
-4. The signer broadcasts the signed transaction to anvil, and Laravel stores the transaction hash.
+1. Laravel checks the password, balance and limits, records a pending `wallet_transfers` row, and queues `ExecuteWalletTransfer`.
+2. The signer proposes the transaction (nonce and fees from anvil).
+3. Laravel rebuilds it from the recipient and amount it expects, checks the chain ID and fee cap, and co-signs it with its authorizer key.
+4. Two of the three Mpcium nodes check both signatures, run threshold ECDSA, and return `(r, s, v)`. The signer checks that the signature recovers to A's address and broadcasts the transaction.
+5. `ConfirmWalletTransfer` waits for the receipt and marks the transfer **Berhasil**.
 
-You'll see **"Transfer berhasil! TX: 0x…"**, and the transfer appears in **Riwayat transfer**. A couple of seconds later (one anvil block), A has about `0.749978 ETH` (0.25 sent plus gas) and B has `0.25 ETH`. Log in as B to see the transfer as received.
+You'll see **"Transfer sedang diproses…"**, and the transfer appears in **Riwayat transfer** as *Menunggu*, then *Berhasil* after a reload once it's mined. A has about `0.749978 ETH` (0.25 sent plus gas) and B has `0.25 ETH`. Log in as B to see the transfer as received.
 
 🎉 That's your first self-hosted MPC transaction.
 
@@ -165,13 +172,17 @@ Stop one node (Ctrl+C won't work inside `dev:all`, so find its PID with `pgrep -
 |---|---|
 | `Docker is not running` | Start Docker Desktop, then re-run. |
 | "Wallet sedang disiapkan" never goes away | The queue worker or `mpc` isn't running. Run `php artisan wallet:provision` to see the actual error. |
-| `MPC request … timed out — are all nodes running?` | A node is still booting or has crashed. Check the `mpc` output for `[READY]` from all three nodes. |
-| `401 unauthorized` from the signer | The signer reads `.env` on startup. Restart `npm run dev:mpc` after changing `MPC_SIGNER_TOKEN`. |
+| `MPC … timed out — are enough nodes running?` | A node is still booting or has crashed. Check the `mpc` output for `[READY]` from all three nodes. |
+| `missing required authorizer signature` / `authorizer … verification failed` in node logs | `MPC_AUTHORIZER_KEY` in `.env` doesn't match the public key in `mpc/cluster/config.yaml`. Re-run `npm run mpc:setup`, then restart `dev:mpc` and `php artisan config:clear`. |
+| `401 unauthorized` from the signer | `MPC_SIGNER_TOKEN` in `.env` differs from `mpc/cluster/signer.env`. Re-run `npm run mpc:setup` and restart. |
+| `Run 'npm run mpc:setup' first (re-run it after upgrading)` | Your cluster predates the hardened setup. Re-run setup; existing wallets are kept. |
+| Transfer stuck on *Menunggu* | The queue worker isn't running, or a node is down. Run `php artisan wallet:reconcile`. |
 | "Wallet belum tersedia" | `MPC_WALLET_ENABLED` isn't `true`. Run `php artisan config:clear`. |
 | `wallet:fund` fails with `anvil_setBalance` | `BASE_RPC_URL` isn't the local anvil chain, or `npm run dev:chain` isn't running. |
-| `insufficient funds … incl. gas` | Fund the sender again; it needs the amount plus gas. |
-| Starting over from scratch | Stop everything, then `rm -rf mpc/cluster && docker compose -f mpc/docker-compose.yml down -v && npm run mpc:setup`. Existing wallets become unusable, so clear `wallet_address` / `mpc_wallet_id` for those users. |
+| "Saldo tidak mencukupi untuk jumlah ini ditambah biaya jaringan" | Fund the sender again; it needs the amount plus gas. |
+| "Biaya jaringan sedang terlalu tinggi" | Gas price is above `MPC_MAX_FEE_GWEI`. |
+| Starting over from scratch | Stop everything, then `rm -rf mpc/cluster && docker compose -f mpc/docker-compose.yml down -v && npm run mpc:setup`. **This destroys every wallet's key shares and metadata**, so clear `wallet_address` / `mpc_wallet_id` for those users. |
 
 > **Notes**
-> - Transfers are marked *Berhasil* as soon as they're broadcast, not when they're mined.
-> - This setup is for local development: unencrypted node keys, one machine, no TLS. For production, follow Mpcium's [production guide](https://github.com/fystack/mpcium/tree/master/deployments/systemd): encrypted identities (`--encrypt`), nodes on separate hosts, and NATS with TLS.
+> - Transfers are marked *Berhasil* only after the transaction is mined (`MPC_CONFIRMATIONS`).
+> - This setup is hardened but still a single machine: all three shares on one disk, unencrypted node identities, no TLS. Before real money is involved, follow [mpc/PRODUCTION.md](mpc/PRODUCTION.md).

@@ -20,6 +20,6 @@ class CreateMpcWalletForNewUser
             return;
         }
 
-        ProvisionMpcWallet::dispatch($event->user);
+        ProvisionMpcWallet::dispatch($event->user)->afterCommit();
     }
 }

@@ -10,21 +10,27 @@ class WalletTransfer extends Model
     use HasFactory;
 
     protected $fillable = [
+        'uuid',
         'sender_id',
         'recipient_id',
         'sender_address',
         'recipient_address',
         'amount_wei',
         'amount_display',
+        'nonce',
         'tx_hash',
         'status',
         'error_message',
         'block_number',
+        'submitted_at',
+        'confirmed_at',
     ];
 
     protected $casts = [
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'submitted_at' => 'datetime',
+        'confirmed_at' => 'datetime',
     ];
 
     public function sender()

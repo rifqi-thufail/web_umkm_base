@@ -71,7 +71,7 @@ function TransferRow({ t, explorer }: { t: WalletTransfer; explorer: string | nu
 
 export default function WalletPage({ wallet, transfers }: { wallet: Wallet; transfers: Paginated<WalletTransfer> }) {
     const { chain } = usePage<SharedProps>().props;
-    const form = useForm({ recipient: '', amount: '' });
+    const form = useForm({ recipient: '', amount: '', password: '' });
     const ready = wallet.enabled && !!wallet.address;
 
     return (
@@ -121,7 +121,7 @@ export default function WalletPage({ wallet, transfers }: { wallet: Wallet; tran
                                     className="flex flex-col gap-4"
                                     onSubmit={(e) => {
                                         e.preventDefault();
-                                        form.post(route('wallet.send'), { preserveScroll: true, onSuccess: () => form.reset() });
+                                        form.post(route('wallet.send'), { preserveScroll: true, onSuccess: () => form.reset(), onFinish: () => form.reset('password') });
                                     }}
                                 >
                                     <TextField
@@ -136,13 +136,26 @@ export default function WalletPage({ wallet, transfers }: { wallet: Wallet; tran
                                     <TextField
                                         id="amount"
                                         label="Jumlah (ETH)"
-                                        type="number"
+                                        inputMode="decimal"
                                         required
                                         placeholder="0.001"
                                         value={form.data.amount}
                                         onChange={(v) => form.setData('amount', v)}
                                         error={form.errors.amount}
                                     />
+                                    <TextField
+                                        id="password"
+                                        label="Kata sandi akun"
+                                        type="password"
+                                        autoComplete="current-password"
+                                        required
+                                        value={form.data.password}
+                                        onChange={(v) => form.setData('password', v)}
+                                        error={form.errors.password}
+                                    />
+                                    <p className="text-sm text-muted-foreground">
+                                        Batas {wallet.limits.per_transfer} per transfer, {wallet.limits.daily} per 24 jam. Transfer tidak bisa dibatalkan.
+                                    </p>
                                     <Button type="submit" disabled={form.processing}>
                                         {form.processing && <Spinner />} Kirim
                                     </Button>

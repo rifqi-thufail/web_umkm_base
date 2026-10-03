@@ -27,10 +27,6 @@ class User extends Authenticatable
         'avatar',
         'alamat',
         'no_hp',
-        'wallet_address',
-        'wallet_provider',
-        'mpc_wallet_id',
-        'wallet_connected_at',
     ];
 
     public function getNameAttribute(): ?string

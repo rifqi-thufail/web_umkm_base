@@ -99,6 +99,7 @@ export type Wallet = {
     provider: string | null;
     connected_at: string | null;
     balance: WalletBalance | null;
+    limits: { per_transfer: string; daily: string };
 };
 
 export type WalletTransfer = {
