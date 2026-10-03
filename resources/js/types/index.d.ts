@@ -90,3 +90,24 @@ export type Paginated<T> = {
 };
 
 export type Network = { name: string; chain_id: number; contract: string | null; explorer: string | null };
+
+export type WalletBalance = { wei: string; eth: string; display: string };
+
+export type Wallet = {
+    enabled: boolean;
+    address: string | null;
+    provider: string | null;
+    connected_at: string | null;
+    balance: WalletBalance | null;
+};
+
+export type WalletTransfer = {
+    id: number;
+    direction: 'sent' | 'received';
+    amount: string;
+    tx_hash: string | null;
+    status: 'pending' | 'confirmed' | 'failed';
+    status_label: string;
+    counterparty: { name: string; email: string | null; address: string };
+    created_at: string | null;
+};

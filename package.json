@@ -9,8 +9,10 @@
         "dev:queue": "php artisan queue:listen --tries=1",
         "dev:logs": "php artisan pail --timeout=0",
         "dev:chain": "bash blockchain/start-local.sh",
-        "dev:all": "concurrently -k -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74,#86efac\" \"npm:dev:server\" \"npm:dev:queue\" \"npm:dev:logs\" \"npm:dev\" \"npm:dev:chain\" -n server,queue,logs,vite,chain",
-        "typecheck": "tsc --noEmit"
+        "dev:all": "concurrently -k -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74,#86efac,#f9a8d4\" \"npm:dev:server\" \"npm:dev:queue\" \"npm:dev:logs\" \"npm:dev\" \"npm:dev:chain\" \"npm:dev:mpc\" -n server,queue,logs,vite,chain,mpc",
+        "typecheck": "tsc --noEmit",
+        "mpc:setup": "bash mpc/setup.sh",
+        "dev:mpc": "bash mpc/start.sh"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.3.3",

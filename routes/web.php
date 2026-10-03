@@ -17,6 +17,7 @@ use App\Http\Controllers\SellerPasswordResetController;
 use App\Http\Controllers\SellerProfileController;
 use App\Http\Controllers\SellerRegisterController;
 use App\Http\Controllers\WishlistController;
+use App\Http\Controllers\WalletController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -64,6 +65,9 @@ Route::middleware('auth:web')->group(function () {
     Route::post('/orders/process', [OrderController::class, 'process'])->name('orders.process');
     Route::get('/riwayat-pesanan', [OrderController::class, 'index'])->name('orders.index');
     Route::get('/riwayat-pesanan/{order}', [OrderController::class, 'show'])->name('orders.show');
+
+    Route::get('/wallet', [WalletController::class, 'index'])->name('wallet.index');
+    Route::post('/wallet/send', [WalletController::class, 'send'])->name('wallet.send');
 });
 
 // --- Penjual ---

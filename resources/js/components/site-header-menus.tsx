@@ -1,5 +1,5 @@
 import { Link, router } from '@inertiajs/react';
-import { HeartIcon, LayoutDashboardIcon, LogOutIcon, PackageIcon, UserIcon } from 'lucide-react';
+import { HeartIcon, LayoutDashboardIcon, LogOutIcon, PackageIcon, UserIcon, WalletIcon } from 'lucide-react';
 import { AccountButton } from '@/components/site-header-account-button';
 import {
     DropdownMenu,
@@ -40,6 +40,11 @@ export function AccountMenu({ user, defaultOpen }: { user: AuthUser; defaultOpen
                     <DropdownMenuItem asChild>
                         <Link href={route('wishlist.index')}>
                             <HeartIcon /> Wishlist
+                        </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                        <Link href={route('wallet.index')}>
+                            <WalletIcon /> Wallet
                         </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>

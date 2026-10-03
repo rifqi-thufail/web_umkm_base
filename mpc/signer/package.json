@@ -1,0 +1,11 @@
+{
+  "name": "ampuh-mpc-signer",
+  "private": true,
+  "type": "module",
+  "description": "HTTP bridge between Laravel and the Mpcium MPC cluster",
+  "dependencies": {
+    "@fystack/mpcium-ts": "0.3.2",
+    "ethers": "^6.13.7",
+    "nats": "^2.29.3"
+  }
+}

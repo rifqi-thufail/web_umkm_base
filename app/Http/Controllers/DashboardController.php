@@ -30,6 +30,7 @@ class DashboardController extends Controller
                 'spent' => (int) $user->orders()->where('payment_status', 'paid')->sum('total_price'),
                 'anchored' => $user->orders()->where('blockchain_status', 'confirmed')->whereNotNull('blockchain_hash')->count(),
             ],
+            'wallet' => $user->hasWallet() ? ['address' => $user->wallet_address] : null,
             'recentOrders' => $user->orders()
                 ->with(['seller', 'orderItems.product.primaryImage'])
                 ->latest()

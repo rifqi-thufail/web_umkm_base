@@ -1,16 +1,17 @@
 import { Link } from '@inertiajs/react';
-import { PackageIcon } from 'lucide-react';
+import { PackageIcon, WalletIcon } from 'lucide-react';
 import { OrderRow } from '@/components/order-row';
 import { ProductCard, ProductGrid } from '@/components/product-card';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { SiteLayout } from '@/layouts/site-layout';
-import { formatDate, formatRupiah } from '@/lib/format';
+import { formatDate, formatRupiah, shortHash } from '@/lib/format';
 import type { Order, ProductCard as Card } from '@/types';
 
 type Props = {
     profile: { name: string; email: string; phone: string | null; address: string | null; joined: string; verified: boolean };
     stats: { orders: number; active: number; spent: number; anchored: number };
+    wallet: { address: string } | null;
     recentOrders: Order[];
     wishlist: Card[];
     recommended: Card[];
@@ -28,7 +29,7 @@ function Section({ title, action, children }: { title: string; action?: React.Re
     );
 }
 
-export default function BuyerDashboard({ profile, stats, recentOrders, wishlist, recommended }: Props) {
+export default function BuyerDashboard({ profile, stats, wallet, recentOrders, wishlist, recommended }: Props) {
     const firstName = profile.name.split(' ')[0];
 
     return (
@@ -63,6 +64,22 @@ export default function BuyerDashboard({ profile, stats, recentOrders, wishlist,
                         ))}
                     </dl>
                 </div>
+
+                {wallet && (
+                    <Link
+                        href={route('wallet.index')}
+                        className="flex items-center gap-4 rounded-lg bg-card p-4 ring-1 ring-border transition-colors hover:bg-muted/50"
+                    >
+                        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted">
+                            <WalletIcon className="size-5" />
+                        </span>
+                        <div className="flex min-w-0 flex-1 flex-col">
+                            <span className="font-medium">Wallet MPC</span>
+                            <span className="truncate text-sm text-muted-foreground">{shortHash(wallet.address)}</span>
+                        </div>
+                        <span className="text-sm font-medium">Buka wallet →</span>
+                    </Link>
+                )}
 
                 <Section
                     title="Pesanan terakhir"
