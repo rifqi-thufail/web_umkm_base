@@ -1,0 +1,107 @@
+flowchart TD
+    subgraph Client["🌐 Client Layer"]
+        BuyerUI([Buyer Browser])
+        PublicUI([Public / Verifier Browser])
+    end
+
+    subgraph Laravel["⚙️ Laravel Application Layer"]
+        direction TB
+        OC["OrderController\n• checkout()\n• process()\n• midtransCallback()\n• coinpaymentsCallback()\n• processSuccessfulPayment()\n• hashOrderToBlockchain()"]
+        BC["BlockchainController\n• verify(query)"]
+        PTC["PublicTransactionController\n• index()\n• show(hash)\n• api()"]
+
+        subgraph Services["Services"]
+            BCS["BaseChainService\n────────────────\n• enabled(): bool\n• fingerprint(Order): array\n• anchorOrder(Order): array\n• verifyOrder(Order): array\n• recordOf(dataHash): array\n• sendTransaction(to, data): txHash\n• waitForReceipt(txHash): receipt\n• rpc(method, params): mixed\n• selector(signature): bytes4\n• recorderAddress(): string"]
+            DOKU["DokuPaymentService\n• createInvoice()\n• handleWebhook()"]
+            CP["CoinPaymentsService\n• createInvoice()\n• ipnHandler()"]
+            MPC["MpcWalletService\n• provisionFor(User)\n• execute(WalletTransfer)\n• refresh(WalletTransfer)\n• getBalance(address)"]
+        end
+
+        OC --> BCS
+        OC --> DOKU
+        OC --> CP
+        BC --> BCS
+        PTC --> BCS
+    end
+
+    subgraph DB["🗄️ MySQL Database"]
+        OT[("orders\n──────────────\nid, order_number\nuser_id, seller_id\ntotal_price\npayment_status\nstatus\nsnap_token\nblockchain_hash\ntransaction_data_hash\nblockchain_status\nblock_number\nchain_id\nblockchain_created_at")]
+        OI[("order_items\n──────────────\norder_id\nproduct_id\nquantity\nprice")]
+        PR[("products\n──────────────\nid, nama_produk\nstok, harga")]
+    end
+
+    subgraph PayGW["💳 Payment Gateways"]
+        MT["Midtrans\n• Snap Token\n• Webhook /midtrans/callback\n• HMAC SHA-512 verify"]
+        CPG["CoinPayments\n• Invoice URL\n• IPN /coinpayments/callback\n• HMAC SHA-512 verify"]
+    end
+
+    subgraph BaseNet["⛓️ Base Blockchain Network"]
+        direction TB
+        BRPC["Base JSON-RPC Endpoint\n(Sepolia / Mainnet)\n────────────────────\n• eth_chainId\n• eth_blockNumber\n• eth_getTransactionCount\n• eth_estimateGas\n• eth_maxPriorityFeePerGas\n• eth_getBlockByNumber\n• eth_sendRawTransaction\n• eth_getTransactionReceipt\n• eth_call"]
+
+        subgraph Contract["Smart Contract (Solidity 0.8.28)"]
+            OR["OrderRegistry.sol\n────────────────────────\nState:\n  mapping bytes32→Record\n  mapping address→isRecorder\n\nRecord struct:\n  uint64 orderId\n  uint64 anchoredAt\n\nFunctions:\n  anchor(bytes32, uint64)\n  recordOf(bytes32): (uint64,uint64)\n  setRecorder(address, bool)\n\nEvents:\n  Anchored(dataHash, orderId, anchoredAt)\n  RecorderSet(recorder, allowed)"]
+        end
+
+        BRPC <-->|JSON-RPC| OR
+    end
+
+    subgraph Fingerprint["🔐 Fingerprinting Logic (BaseChainService::fingerprint)"]
+        FP1["Collect Fields:\norder_number, user_id,\nseller_id, total_price,\ncreated_at, items[]"]
+        FP2["JSON encode\n(sorted by product_id,\nno escaping)"]
+        FP3["Keccak-256 Hash\n= dataHash (bytes32)"]
+        FP1 --> FP2 --> FP3
+    end
+
+    subgraph TxBuild["📦 EIP-1559 Transaction Build"]
+        TX1["Calldata:\nselector('anchor(bytes32,uint64)')\n+ dataHash (padded 32B)\n+ orderId (padded 32B)"]
+        TX2["EIP-1559Transaction(\n  nonce, maxPriorityFee,\n  maxFee, gasLimit,\n  to=contract, value=0,\n  data=calldata\n)"]
+        TX3["Sign with\nrecorder private key\n(secp256k1)"]
+        TX1 --> TX2 --> TX3
+    end
+
+    subgraph Verify["🔍 Verification Logic"]
+        V1["Recompute fingerprint\nfrom live DB order"]
+        V2["eth_call recordOf(dataHash)\n→ (orderId, anchoredAt)"]
+        V3{anchoredAt > 0\nAND orderId matches?}
+        V4(["✅ VERIFIED\nData unchanged on-chain"])
+        V5(["❌ NOT VERIFIED\nData may be tampered"])
+        V1 --> V2 --> V3
+        V3 -->|Yes| V4
+        V3 -->|No| V5
+    end
+
+    BuyerUI -->|POST /checkout| OC
+    BuyerUI -->|POST /orders/process| OC
+    PublicUI -->|GET /transaksi| PTC
+    PublicUI -->|GET /transaksi/:hash| PTC
+    PublicUI -->|GET /verifikasi?q=| BC
+
+    MT -->|POST webhook| OC
+    CPG -->|POST IPN| OC
+
+    OC -->|DB::transaction| OT
+    OC -->|afterCommit| BCS
+    OT --- OI
+    OT --- PR
+
+    BCS --> Fingerprint
+    Fingerprint --> TxBuild
+    TxBuild -->|eth_sendRawTransaction| BRPC
+    BCS -->|waitForReceipt poll| BRPC
+    BCS -->|UPDATE blockchain_hash\ntransaction_data_hash\nblockchain_status\nblock_number| OT
+
+    BC --> Verify
+    PTC --> Verify
+    Verify -->|eth_call recordOf| BRPC
+
+    OC --> MT
+    OC --> CPG
+
+    style OR fill:#4f46e5,color:#fff,stroke:#4338ca
+    style BRPC fill:#7c3aed,color:#fff,stroke:#6d28d9
+    style BCS fill:#0891b2,color:#fff,stroke:#0e7490
+    style FP3 fill:#0891b2,color:#fff,stroke:#0e7490
+    style V4 fill:#16a34a,color:#fff,stroke:#15803d
+    style V5 fill:#dc2626,color:#fff,stroke:#b91c1c
+    style OT fill:#ca8a04,color:#fff,stroke:#a16207

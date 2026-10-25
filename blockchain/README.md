@@ -52,32 +52,40 @@ cast call $BASE_REGISTRY_ADDRESS "recordOf(bytes32)(uint64,uint64)" 0x<data-hash
 cd blockchain && forge test            # contract tests
 ```
 
-## Base Sepolia / Base mainnet
+## Base mainnet / Base Sepolia
 
 ```bash
-cd blockchain
-forge create src/OrderRegistry.sol:OrderRegistry \
-  --rpc-url https://sepolia.base.org --private-key $DEPLOYER_KEY --broadcast
+blockchain/deploy-base.sh mainnet     # or: sepolia (free faucet ETH) to rehearse first
 ```
 
-`.env`:
+The script, run from your machine (needs Foundry):
 
-```
-BASE_ENABLED=true
-BASE_NETWORK_NAME="Base Sepolia"
-BASE_RPC_URL=https://sepolia.base.org        # mainnet: https://mainnet.base.org (chain 8453)
-BASE_CHAIN_ID=84532
-BASE_REGISTRY_ADDRESS=0x…
-BASE_RECORDER_PRIVATE_KEY=0x…                # funded with a little ETH on Base for gas
-BASE_EXPLORER_URL=https://sepolia.basescan.org   # mainnet: https://basescan.org
+1. Uses `BASE_RECORDER_PRIVATE_KEY` from `.env`, or generates a new wallet and saves it there.
+   Back that key up. It only needs to hold gas money.
+2. Stops with the address to fund if it holds less than 0.0002 ETH. Send ETH **on the Base
+   network** (an exchange withdrawal to "Base", or https://bridge.base.org), then run it again.
+   Deploying costs a few cents; each anchor about a tenth of a cent.
+3. Deploys `OrderRegistry` (skipped if `.env` already points at a deployed one on that chain)
+   and writes `BASE_ENABLED=true` plus the network's RPC, chain id, contract and explorer into `.env`.
+   Set `BASESCAN_API_KEY` to also verify the source on Basescan.
+
+Then:
+
+```bash
+php artisan config:clear && php artisan base:status   # balance, recorder allowed, warnings
+php artisan base:anchor --pending                    # record orders paid while Base was off
 ```
 
-Use a dedicated recorder wallet that holds only gas money. If it is different from the
-deployer, allow it with `cast send $BASE_REGISTRY_ADDRESS "setRecorder(address,bool)" <recorder> true`.
+On the server, copy the same `BASE_*` lines into its `.env` and run `php artisan optimize`.
+`https://mainnet.base.org` is rate limited; for real traffic use a provider URL
+(Alchemy, QuickNode, Coinbase CDP) in `BASE_RPC_URL`.
+
+To use a recorder different from the deployer, allow it from the deployer wallet:
+`cast send $BASE_REGISTRY_ADDRESS "setRecorder(address,bool)" <recorder> true`.
 
 ## When anchoring fails
 
 Payments never depend on the chain. The Midtrans/CoinPayments webhook marks the order paid,
 commits, and only then anchors it. If the RPC is down, the order keeps
 `blockchain_status = failed` with the error in `blockchain_metadata`; retry with
-`php artisan base:anchor <id>`.
+`php artisan base:anchor <id>`, or all of them with `php artisan base:anchor --pending`.

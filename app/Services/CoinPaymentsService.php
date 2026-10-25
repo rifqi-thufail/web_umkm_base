@@ -13,9 +13,9 @@ class CoinPaymentsService
 
     public function __construct()
     {
-        $this->apiUrl = env('COINPAYMENTS_API_URL');
-        $this->clientId = env('COINPAYMENTS_CLIENT_ID');
-        $this->clientSecret = env('COINPAYMENTS_CLIENT_SECRET');
+        $this->apiUrl = config('services.coinpayments.api_url');
+        $this->clientId = config('services.coinpayments.client_id');
+        $this->clientSecret = config('services.coinpayments.client_secret');
     }
 
     /**

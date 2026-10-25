@@ -1,0 +1,35 @@
+flowchart TD
+    A([Buyer]) -->|Checkout| B[Order Created\nin Database]
+    B --> C{Payment\nGateway}
+
+    C -->|Midtrans IDR| D[Midtrans Snap\nPayment]
+    C -->|CoinPayments Crypto| E[CoinPayments\nInvoice]
+
+    D -->|Webhook Callback| F{Payment\nSuccessful?}
+    E -->|IPN Callback| F
+
+    F -->|No| G([Order Failed\n/ Pending])
+    F -->|Yes| H[Update Order\nto Paid]
+
+    H --> I[Reduce Stock\nin Database]
+    I --> J[Generate\nkeccak256 Fingerprint\nof Order Data]
+
+    J --> K[Sign & Broadcast\nEIP-1559 Tx\nvia Base RPC]
+    K --> L[(OrderRegistry\nSmart Contract\non Base)]
+
+    L --> M[anchor called:\nstore dataHash\n+ orderId + timestamp]
+    M --> N[Blockchain\nTx Hash stored\nin DB]
+
+    N --> O([Public Transparency\nPage with\nOn-chain Proof])
+    O --> P{Verify\nOrder?}
+    P -->|Yes| Q[Recompute\nFingerprint]
+    Q --> R[Call recordOf\non Contract]
+    R --> S{Hash\nMatches?}
+    S -->|Yes| T([Verified ✓])
+    S -->|No| U([Tampered ✗])
+
+    style L fill:#4f46e5,color:#fff,stroke:#4338ca
+    style T fill:#16a34a,color:#fff,stroke:#15803d
+    style U fill:#dc2626,color:#fff,stroke:#b91c1c
+    style J fill:#0891b2,color:#fff,stroke:#0e7490
+    style M fill:#4f46e5,color:#fff,stroke:#4338ca

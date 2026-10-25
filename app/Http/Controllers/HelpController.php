@@ -20,7 +20,8 @@ class HelpController extends Controller
         $request->validate([
             'gmail' => 'required|email',
             'pesan' => 'required|string|min:10',
-            'upload_file' => 'nullable|file|mimes:jpg,jpeg,png,gif,mp4,mov,avi,wmv|max:10240', // Max 10MB
+            // mimes checks the content; extensions also binds the client-supplied extension.
+            'upload_file' => 'nullable|file|mimes:jpg,jpeg,png,gif,mp4,mov,avi,wmv|extensions:jpg,jpeg,png,gif,mp4,mov,avi,wmv|max:10240', // Max 10MB
         ], [
             'upload_file.max' => 'File yang diupload terlalu besar. Maksimal ukuran file adalah 10MB.',
             'upload_file.mimes' => 'Format file tidak didukung. Hanya file JPG, PNG, GIF, MP4, MOV, AVI, WMV yang diizinkan.',
@@ -46,16 +47,19 @@ class HelpController extends Controller
         if ($request->hasFile('upload_file')) {
             $file = $request->file('upload_file');
             $fileName = $file->getClientOriginalName();
-            $fileExtension = $file->getClientOriginalExtension();
+            // Stored name uses the content-derived extension, never the client's filename.
+            $fileExtension = strtolower((string) $file->guessExtension());
             
             // Determine file type
             $imageExtensions = ['jpg', 'jpeg', 'png', 'gif'];
             $videoExtensions = ['mp4', 'mov', 'avi', 'wmv'];
             
-            if (in_array(strtolower($fileExtension), $imageExtensions)) {
+            if (in_array($fileExtension, $imageExtensions)) {
                 $fileType = 'image';
-            } elseif (in_array(strtolower($fileExtension), $videoExtensions)) {
+            } elseif (in_array($fileExtension, $videoExtensions)) {
                 $fileType = 'video';
+            } else {
+                return back()->withErrors(['upload_file' => 'Format file tidak didukung.'])->withInput();
             }
             
             // Store file with unique name

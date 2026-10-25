@@ -80,7 +80,7 @@ Route::prefix('seller')->name('seller.')->group(function () {
         Route::get('forgot-password', [SellerPasswordResetController::class, 'create'])->name('password.request');
         Route::post('forgot-password', [SellerPasswordResetController::class, 'store'])->name('password.email');
         Route::get('reset-password', [SellerPasswordResetController::class, 'edit'])->name('password.reset');
-        Route::post('reset-password', [SellerPasswordResetController::class, 'update'])->name('password.store');
+        Route::post('reset-password', [SellerPasswordResetController::class, 'update'])->middleware('throttle:10,1')->name('password.store');
     });
 
     Route::middleware('auth:seller')->group(function () {

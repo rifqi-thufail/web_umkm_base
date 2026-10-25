@@ -51,6 +51,8 @@ class BaseChainService
         $block = hexdec($this->rpc('eth_blockNumber'));
         $contract = config('blockchain.base.contract_address');
         $code = $contract ? $this->rpc('eth_getCode', [$contract, 'latest']) : '0x';
+        $recorder = $this->recorderAddress();
+        $deployed = strlen((string) $code) > 2;
 
         return [
             'rpc_url' => config('blockchain.base.rpc_url'),
@@ -58,9 +60,26 @@ class BaseChainService
             'expected_chain_id' => (int) config('blockchain.base.chain_id'),
             'block_number' => $block,
             'contract' => $contract,
-            'contract_deployed' => strlen($code) > 2,
-            'recorder' => $this->recorderAddress(),
+            'contract_deployed' => $deployed,
+            'recorder' => $recorder,
+            'recorder_balance_eth' => $recorder ? $this->weiToEth(hexdec($this->rpc('eth_getBalance', [$recorder, 'latest']))) : null,
+            'recorder_allowed' => $recorder && $deployed ? $this->isRecorder($recorder) : false,
         ];
+    }
+
+    public function isRecorder(string $address): bool
+    {
+        $result = $this->rpc('eth_call', [[
+            'to' => config('blockchain.base.contract_address'),
+            'data' => $this->selector('isRecorder(address)') . $this->word(substr(strtolower($address), 2)),
+        ], 'latest']);
+
+        return hexdec(substr((string) $result, -1)) === 1;
+    }
+
+    private function weiToEth(float|int $wei): string
+    {
+        return rtrim(rtrim(number_format($wei / 1e18, 8, '.', ''), '0'), '.');
     }
 
     /**

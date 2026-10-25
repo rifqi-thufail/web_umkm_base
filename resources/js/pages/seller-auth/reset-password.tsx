@@ -7,7 +7,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp
 import { Spinner } from '@/components/ui/spinner';
 import { AuthLayout } from '@/layouts/auth-layout';
 
-export default function SellerResetPassword({ no_hp, status }: { no_hp?: string | null; status?: string }) {
+export default function SellerResetPassword({ no_hp, status, dev_otp }: { no_hp?: string | null; status?: string; dev_otp?: string | null }) {
     const form = useForm({ no_hp: no_hp ?? '', otp: '', password: '', password_confirmation: '' });
 
     return (
@@ -15,6 +15,13 @@ export default function SellerResetPassword({ no_hp, status }: { no_hp?: string 
             {status && (
                 <Alert>
                     <AlertDescription>{status}</AlertDescription>
+                </Alert>
+            )}
+            {dev_otp && (
+                <Alert>
+                    <AlertDescription>
+                        Mode lokal tanpa SMS gateway. Kode OTP: <span className="font-mono font-semibold tracking-widest">{dev_otp}</span>
+                    </AlertDescription>
                 </Alert>
             )}
             <form

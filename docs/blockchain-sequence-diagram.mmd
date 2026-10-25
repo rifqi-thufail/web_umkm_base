@@ -1,0 +1,63 @@
+sequenceDiagram
+    autonumber
+    actor Buyer
+    participant App as Laravel App
+    participant DB as MySQL DB
+    participant Gateway as Payment Gateway<br/>(Midtrans / CoinPayments)
+    participant Queue as Queue / afterCommit Hook
+    participant BaseChain as BaseChainService
+    participant RPC as Base JSON-RPC<br/>(Base Sepolia / Mainnet)
+    participant Contract as OrderRegistry.sol<br/>(Base Blockchain)
+    participant Public as Public Transparency<br/>Page
+
+    Buyer->>App: POST /checkout (cart items, gateway choice)
+    App->>DB: BEGIN TRANSACTION
+    App->>DB: INSERT orders (status=pending, payment_status=unpaid)
+    App->>DB: INSERT order_items
+    App->>DB: COMMIT
+    App->>Gateway: Create payment (Snap token / Invoice)
+    Gateway-->>App: token / invoiceUrl
+    App-->>Buyer: Redirect to payment UI
+
+    Buyer->>Gateway: Complete payment
+    Gateway->>App: POST /webhook (Midtrans) or POST /ipn (CoinPayments)
+    App->>App: Verify HMAC / signature
+    App->>DB: BEGIN TRANSACTION
+    App->>DB: UPDATE orders SET payment_status=paid, status=processing
+    App->>DB: UPDATE products SET stok = stok - quantity
+    App->>Queue: DB::afterCommit → anchorOrder(order)
+    App->>DB: COMMIT
+    App-->>Gateway: 200 OK
+
+    Queue->>BaseChain: anchorOrder(Order $order)
+    BaseChain->>BaseChain: fingerprint(order):<br/>JSON{order_number, user_id, seller_id,<br/>total_price, items} → keccak256 hash
+    BaseChain->>RPC: eth_getTransactionCount (get nonce)
+    RPC-->>BaseChain: nonce
+    BaseChain->>RPC: eth_estimateGas (anchor calldata)
+    RPC-->>BaseChain: gas estimate
+    BaseChain->>RPC: eth_maxPriorityFeePerGas + eth_getBlockByNumber
+    RPC-->>BaseChain: baseFee + tip
+    BaseChain->>BaseChain: Build EIP-1559 tx, sign with private_key
+    BaseChain->>RPC: eth_sendRawTransaction(signed tx)
+    RPC-->>BaseChain: txHash
+
+    loop Poll every 500ms (up to 30s)
+        BaseChain->>RPC: eth_getTransactionReceipt(txHash)
+        RPC-->>BaseChain: receipt (or null)
+    end
+
+    RPC-->>BaseChain: receipt{status=0x1, blockNumber}
+    BaseChain-->>Queue: {success, tx_hash, block_number, data_hash}
+    Queue->>DB: UPDATE orders SET blockchain_hash=txHash,<br/>transaction_data_hash=dataHash,<br/>blockchain_status=confirmed,<br/>block_number=N
+
+    Buyer->>Public: GET /transaksi or GET /verifikasi?q=hash
+    Public->>DB: SELECT order WHERE blockchain_hash=hash
+    DB-->>Public: Order record
+    Public->>BaseChain: verifyOrder(order)
+    BaseChain->>BaseChain: Recompute fingerprint → dataHash
+    BaseChain->>RPC: eth_call recordOf(dataHash)
+    RPC->>Contract: recordOf(dataHash)
+    Contract-->>RPC: (orderId, anchoredAt)
+    RPC-->>BaseChain: (orderId, anchoredAt)
+    BaseChain-->>Public: {verified: true/false, anchored_at, data_hash}
+    Public-->>Buyer: Show verification result ✓ / ✗

@@ -94,12 +94,12 @@ function BuyBox({ product }: { product: ProductDetail }) {
                 </InputGroupAddon>
             </InputGroup>
             {auth.user ? (
-                <Button type="submit" size="lg" className="h-10 flex-1" disabled={soldOut || form.processing}>
+                <Button type="submit" size="lg" className="h-10 sm:flex-1" disabled={soldOut || form.processing}>
                     {form.processing && <Spinner data-icon="inline-start" />}
                     {soldOut ? 'Stok habis' : 'Tambah ke keranjang'}
                 </Button>
             ) : (
-                <Button size="lg" className="h-10 flex-1" asChild>
+                <Button size="lg" className="h-10 sm:flex-1" asChild>
                     <Link href={route('user.login')}>Masuk untuk membeli</Link>
                 </Button>
             )}

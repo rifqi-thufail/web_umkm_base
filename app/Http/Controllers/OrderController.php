@@ -47,7 +47,7 @@ class OrderController extends Controller
             ],
             'gateways' => [
                 'midtrans' => (bool) config('midtrans.server_key'),
-                'coinpayments' => (bool) env('COINPAYMENTS_CLIENT_ID'),
+                'coinpayments' => (bool) config('services.coinpayments.client_id'),
             ],
         ]);
     }
@@ -235,23 +235,35 @@ class OrderController extends Controller
         $payload = $request->getContent();
         Log::info('CoinPayments IPN received', $request->all());
 
-        $hmacHeader = $request->header('HMAC');
-        $ipnSecret = env('COINPAYMENTS_IPN_SECRET'); // Buat secret ini di dashboard CoinPayments
-        
+        $hmacHeader = (string) $request->header('HMAC');
+        $ipnSecret = (string) config('services.coinpayments.ipn_secret'); // Buat secret ini di dashboard CoinPayments
+
+        // Fail closed: an empty key would make the HMAC computable by anyone.
+        if ($ipnSecret === '') {
+            Log::critical('CoinPayments IPN rejected: COINPAYMENTS_IPN_SECRET is not configured');
+            return response()->json(['message' => 'IPN not configured'], 503);
+        }
+
         $calculatedHmac = hash_hmac('sha512', $payload, $ipnSecret);
 
-        if ($hmacHeader !== $calculatedHmac) {
+        if (! hash_equals($calculatedHmac, $hmacHeader)) {
             Log::error('Invalid CoinPayments IPN Signature');
             return response()->json(['message' => 'Invalid signature'], 403);
         }
 
         $status = intval($request->input('status'));
-        $orderNumber = $request->input('invoiceId'); 
+        $orderNumber = $request->input('invoiceId');
 
         $order = Order::where('order_number', $orderNumber)->first();
 
         if (!$order) {
             return response()->json(['message' => 'Order not found'], 404);
+        }
+
+        // Only orders checked out through CoinPayments may be settled by its IPN.
+        if ($order->payment_gateway !== 'coinpayments') {
+            Log::warning('CoinPayments IPN for non-CoinPayments order', ['order' => $order->order_number]);
+            return response()->json(['message' => 'Order gateway mismatch'], 409);
         }
 
         if ($status >= 100 || $status == 2) {

@@ -8,12 +8,24 @@ use Illuminate\Console\Command;
 
 class BaseAnchorOrder extends Command
 {
-    protected $signature = 'base:anchor {order : Order id} {--force : Anchor even if the order is not paid}';
+    protected $signature = 'base:anchor {order? : Order id}
+        {--pending : Anchor every paid order that is not on chain yet}
+        {--force : Anchor even if the order is not paid}';
 
     protected $description = 'Anchor (or retry anchoring) a paid order on Base';
 
     public function handle(BaseChainService $base): int
     {
+        if ($this->option('pending')) {
+            return $this->anchorPending($base);
+        }
+
+        if (! $this->argument('order')) {
+            $this->error('Pass an order id, or --pending.');
+
+            return self::FAILURE;
+        }
+
         $order = Order::findOrFail($this->argument('order'));
 
         if ($order->payment_status !== 'paid' && ! $this->option('force')) {
@@ -41,5 +53,35 @@ class BaseAnchorOrder extends Command
         $this->line("hash: {$result['data_hash']}");
 
         return self::SUCCESS;
+    }
+
+    private function anchorPending(BaseChainService $base): int
+    {
+        if (! $base->enabled()) {
+            $this->error('Base anchoring is disabled or not configured.');
+
+            return self::FAILURE;
+        }
+
+        $orders = Order::query()
+            ->where('payment_status', 'paid')
+            ->where(fn ($q) => $q->whereNull('blockchain_status')->orWhere('blockchain_status', '!=', 'confirmed'))
+            ->orderBy('id')
+            ->get();
+
+        $failed = 0;
+        foreach ($orders as $order) {
+            $result = $order->anchorOnBase($base);
+            if ($result['success']) {
+                $this->line("order {$order->id}: {$result['tx_hash']}");
+            } else {
+                $failed++;
+                $this->warn("order {$order->id}: {$result['error']}");
+            }
+        }
+
+        $this->info(sprintf('%d anchored, %d failed.', $orders->count() - $failed, $failed));
+
+        return $failed ? self::FAILURE : self::SUCCESS;
     }
 }

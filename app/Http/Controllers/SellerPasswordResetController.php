@@ -9,6 +9,7 @@ use Illuminate\Auth\Events\Lockout;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules;
@@ -17,6 +18,14 @@ use Illuminate\View\View;
 
 class SellerPasswordResetController extends Controller
 {
+    /** OTPs one seller account (or one destination phone) can be sent per window. */
+    private const ACCOUNT_ISSUE_LIMIT = 5;
+
+    /** Wrong OTP guesses allowed per seller account per window, across all OTPs. */
+    private const ACCOUNT_GUESS_LIMIT = 10;
+
+    private const ACCOUNT_WINDOW = 3600;
+
     public function create(Request $request): \Inertia\Response
     {
         return \Inertia\Inertia::render('seller-auth/forgot-password', [
@@ -33,6 +42,17 @@ class SellerPasswordResetController extends Controller
         $this->ensureIsNotRateLimited($request);
 
         $seller = Seller::query()->where('no_hp', '=', (string) $request->input('no_hp'))->firstOrFail();
+
+        // Per-account and per-destination budgets: neither rotating IPs nor re-spelling the
+        // number (0812... / +62812...) buys more OTPs for the same seller or the same phone.
+        $accountKeys = [
+            $this->sellerIssueKey($seller),
+            'seller-otp-issue-dest:'.$otpService->normalizePhone((string) $seller->no_hp),
+        ];
+        foreach ($accountKeys as $key) {
+            $this->ensureKeyNotLimited($request, $key, self::ACCOUNT_ISSUE_LIMIT, 'no_hp');
+        }
+
         $otp = (string) random_int(100000, 999999);
 
         SellerPasswordResetOtp::query()->where('seller_id', '=', $seller->id)->delete();
@@ -45,19 +65,39 @@ class SellerPasswordResetController extends Controller
             'attempts' => 0,
         ]);
 
-        $otpService->sendPasswordResetOtp($seller, $otp);
-
         RateLimiter::hit($this->throttleKey($request), 300);
+        foreach ($accountKeys as $key) {
+            RateLimiter::hit($key, self::ACCOUNT_WINDOW);
+        }
+
+        try {
+            $otpService->sendPasswordResetOtp($seller, $otp);
+        } catch (\Throwable $e) {
+            Log::error('Gagal mengirim OTP reset password seller', ['seller_id' => $seller->id, 'error' => $e->getMessage()]);
+            SellerPasswordResetOtp::query()->where('seller_id', '=', $seller->id)->delete();
+
+            throw ValidationException::withMessages([
+                'no_hp' => 'Kode OTP gagal dikirim. Coba lagi beberapa saat lagi.',
+            ]);
+        }
 
         $request->session()->put('seller_password_reset_no_hp', $seller->no_hp);
 
-        return redirect()->route('seller.password.reset')->with('status', 'Kode OTP reset password sudah dikirim ke nomor HP seller.');
+        $redirect = redirect()->route('seller.password.reset')->with('status', 'Kode OTP reset password sudah dikirim ke nomor HP seller.');
+
+        // No gateway in local development: show the code instead of making people dig through the log.
+        if ($otpService->logsOnly() && app()->isLocal()) {
+            $redirect->with('dev_otp', $otp);
+        }
+
+        return $redirect;
     }
 
     public function edit(Request $request): \Inertia\Response
     {
         return \Inertia\Inertia::render('seller-auth/reset-password', [
             'status' => session('status'),
+            'dev_otp' => session('dev_otp'),
             'no_hp' => old('no_hp', $request->session()->get('seller_password_reset_no_hp')),
         ]);
     }
@@ -90,7 +130,18 @@ class SellerPasswordResetController extends Controller
             ]);
         }
 
-        if ($otpRecord->attempts >= 5) {
+        // Wrong guesses are counted per seller across every OTP issued, so requesting a
+        // fresh code does not reset the budget.
+        $this->ensureKeyNotLimited($request, $this->sellerVerifyKey($seller), self::ACCOUNT_GUESS_LIMIT, 'otp');
+
+        // Claim an attempt atomically before the (slow) hash check, so concurrent
+        // submissions cannot all slip past the per-OTP limit.
+        $claimed = SellerPasswordResetOtp::query()
+            ->whereKey($otpRecord->id)
+            ->where('attempts', '<', 5)
+            ->increment('attempts');
+
+        if ($claimed === 0) {
             $otpRecord->delete();
 
             throw ValidationException::withMessages([
@@ -99,7 +150,7 @@ class SellerPasswordResetController extends Controller
         }
 
         if (! Hash::check($request->string('otp'), $otpRecord->otp_hash)) {
-            $otpRecord->increment('attempts');
+            RateLimiter::hit($this->sellerVerifyKey($seller), self::ACCOUNT_WINDOW);
 
             throw ValidationException::withMessages([
                 'otp' => 'OTP yang dimasukkan tidak valid.',
@@ -117,6 +168,7 @@ class SellerPasswordResetController extends Controller
 
         $request->session()->forget('seller_password_reset_no_hp');
         RateLimiter::clear($this->throttleKey($request));
+        RateLimiter::clear($this->sellerVerifyKey($seller));
 
         return redirect()->route('seller.login')->with('status', 'Password seller berhasil direset. Silakan login kembali dengan nomor HP.');
     }
@@ -142,5 +194,33 @@ class SellerPasswordResetController extends Controller
     protected function throttleKey(Request $request): string
     {
         return Str::transliterate(Str::lower($request->string('no_hp')).'|'.$request->ip());
+    }
+
+    protected function ensureKeyNotLimited(Request $request, string $key, int $max, string $field): void
+    {
+        if (! RateLimiter::tooManyAttempts($key, $max)) {
+            return;
+        }
+
+        event(new Lockout($request));
+
+        $seconds = RateLimiter::availableIn($key);
+
+        throw ValidationException::withMessages([
+            $field => __('auth.throttle', [
+                'seconds' => $seconds,
+                'minutes' => (int) ceil($seconds / 60),
+            ]),
+        ]);
+    }
+
+    protected function sellerIssueKey(Seller $seller): string
+    {
+        return 'seller-otp-issue:'.$seller->id;
+    }
+
+    protected function sellerVerifyKey(Seller $seller): string
+    {
+        return 'seller-otp-verify:'.$seller->id;
     }
 }
