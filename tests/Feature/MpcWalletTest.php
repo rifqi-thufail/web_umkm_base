@@ -207,6 +207,19 @@ class MpcWalletTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_send_rejects_unverified_email_recipient(): void
+    {
+        [$sender, $recipient] = $this->users();
+        $recipient->forceFill(['email_verified_at' => null])->save();
+        Http::fake();
+
+        $this->actingAs($sender)
+            ->post(route('wallet.send'), ['recipient' => $recipient->email, 'amount' => '0.1', 'password' => 'password'])
+            ->assertSessionHasErrors('recipient');
+
+        Http::assertNothingSent();
+    }
+
     public function test_wallet_fields_are_not_mass_assignable(): void
     {
         [$sender] = $this->users();

@@ -86,7 +86,8 @@ class SellerPasswordResetController extends Controller
         $redirect = redirect()->route('seller.password.reset')->with('status', 'Kode OTP reset password sudah dikirim ke nomor HP seller.');
 
         // No gateway in local development: show the code instead of making people dig through the log.
-        if ($otpService->logsOnly() && app()->isLocal()) {
+        // Also require a loopback client, so a misconfigured APP_ENV=local server never shows it.
+        if ($otpService->logsOnly() && app()->isLocal() && in_array($request->ip(), ['127.0.0.1', '::1'], true)) {
             $redirect->with('dev_otp', $otp);
         }
 

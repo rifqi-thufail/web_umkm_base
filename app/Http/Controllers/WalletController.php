@@ -99,7 +99,8 @@ class WalletController extends Controller
             $recipientAddress = strtolower($input);
         } elseif (filter_var($input, FILTER_VALIDATE_EMAIL)) {
             $target = User::where('email', $input)->first();
-            if (! $target || ! $target->hasWallet()) {
+            // Only route funds to accounts that proved they own the email.
+            if (! $target || ! $target->hasVerifiedEmail() || ! $target->hasWallet()) {
                 return back()->withErrors(['recipient' => 'Penerima dengan email tersebut tidak ditemukan atau belum memiliki wallet.']);
             }
             $recipientAddress = strtolower($target->wallet_address);

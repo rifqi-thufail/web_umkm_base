@@ -282,8 +282,11 @@ class OrderController extends Controller
     // ======================================================
     protected function processSuccessfulPayment(Order $order)
     {
-        DB::transaction(function () use ($order) {
-            if ($order->payment_status == 'unpaid') {
+        DB::transaction(function () use (&$order) {
+            // Re-read under a row lock so overlapping webhook deliveries cannot both see 'unpaid'.
+            $order = Order::whereKey($order->id)->lockForUpdate()->first();
+
+            if ($order && $order->payment_status == 'unpaid') {
                 $order->update(['payment_status' => 'paid', 'status' => 'processing']);
 
                 foreach ($order->items as $item) {

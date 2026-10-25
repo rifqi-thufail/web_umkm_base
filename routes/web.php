@@ -37,7 +37,7 @@ Route::get('/api/public/transactions', [PublicTransactionController::class, 'api
 
 // --- Bantuan ---
 Route::get('/bantuan', [HelpController::class, 'index'])->name('help.index');
-Route::post('/bantuan', [HelpController::class, 'store'])->name('help.store');
+Route::post('/bantuan', [HelpController::class, 'store'])->middleware('throttle:5,10')->name('help.store');
 
 // --- Login pilihan (pembeli / penjual) ---
 Route::get('login', fn () => Inertia::render('auth/choose'))->middleware('guest')->name('login');
