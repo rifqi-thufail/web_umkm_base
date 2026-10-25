@@ -1,0 +1,20 @@
+# Production layout puts the whole app inside public_html/web_umkm (see
+# scripts/deploy-hostinger.sh). Only built assets and public uploads may be
+# served from here; everything else (.env, .git, storage/logs, vendor,
+# database/*.sqlite, bootstrap/cache, ...) must be refused.
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule !^(public/build/|storage/app/public/) - [F]
+</IfModule>
+
+# Fail closed if mod_rewrite is ever unavailable.
+<IfModule !mod_rewrite.c>
+    Require all denied
+</IfModule>
+
+# Dotfiles are never served, even under the allowed paths.
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>

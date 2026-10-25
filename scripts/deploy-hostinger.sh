@@ -5,6 +5,7 @@
 #
 # Server layout (pre-existing): the app lives in public_html/web_umkm and public_html/index.php
 # boots it; public_html/.htaccess serves /build and /storage from inside web_umkm.
+# The repo's root .htaccess is deployed to web_umkm/ and refuses everything else there.
 # The server's .env, storage/ and .git are left untouched.
 set -euo pipefail
 
@@ -32,7 +33,7 @@ rsync -az --delete -e "ssh -p 65002" \
   --exclude /.git --exclude /node_modules --exclude /vendor \
   --exclude /.env --exclude '/.env.*' --exclude /storage --exclude /public/storage --exclude /public/hot \
   --exclude /mpc --exclude /blockchain --exclude /.claude --exclude '/database/*.sqlite' \
-  --exclude /.htaccess --exclude /error_log --exclude /.phpunit.result.cache \
+  --exclude /error_log --exclude /.phpunit.result.cache \
   ./ "u595677082@153.92.10.3:$APP_DIR/"
 
 echo "==> Installing and migrating on server"
@@ -48,3 +49,9 @@ EOF
 echo "==> Checking"
 curl -s -o /dev/null -w "/up %{http_code}\n" https://ampuh.finance/up
 curl -s -o /dev/null -w "/transparansi %{http_code}\n" https://ampuh.finance/transparansi
+# The app tree must stay unreachable; abort loudly if the deny rule stopped working.
+for p in /web_umkm/.env /web_umkm/composer.json /web_umkm/storage/logs/laravel.log; do
+  code=$(curl -s -o /dev/null -I -w "%{http_code}" "https://ampuh.finance$p")
+  echo "$p $code"
+  [ "$code" = "403" ] || [ "$code" = "404" ] || { echo "!! $p is reachable ($code)"; exit 1; }
+done
