@@ -9,7 +9,7 @@ AMPUH (Aplikasi Merah Putih Universitas Hasanuddin) adalah marketplace untuk UMK
 - Riwayat pesanan dengan kuitansi yang bisa diverifikasi di Base.
 - Buku transaksi publik (`/transparansi`) dan halaman verifikasi (`/verifikasi?q=<hash>`).
 - Dashboard penjual: produk (multi-foto, foto utama), pesanan lunas, aktivasi Midtrans, profil toko.
-- Login penjual dengan nomor HP, reset password lewat OTP SMS.
+- Login penjual dengan nomor HP, reset password lewat OTP yang dikirim ke email toko.
 - Wishlist, profil pembeli, halaman bantuan.
 
 ## Stack

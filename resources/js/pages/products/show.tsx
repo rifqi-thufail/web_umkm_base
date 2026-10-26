@@ -100,7 +100,7 @@ function BuyBox({ product }: { product: ProductDetail }) {
                 </Button>
             ) : (
                 <Button size="lg" className="h-10 sm:flex-1" asChild>
-                    <Link href={route('user.login')}>Masuk untuk membeli</Link>
+                    <Link href={route('user.login', { redirect: `/products/${product.id}` })}>Masuk untuk membeli</Link>
                 </Button>
             )}
         </form>

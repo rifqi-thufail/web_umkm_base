@@ -56,7 +56,7 @@ export default function Verify({ query, network, result }: Props) {
                                     Periksa
                                 </Button>
                             </div>
-                            {form.errors.q ? <FieldError>{form.errors.q}</FieldError> : <FieldDescription>Hash ada di halaman kuitansi dan di email pesanan.</FieldDescription>}
+                            {form.errors.q ? <FieldError>{form.errors.q}</FieldError> : <FieldDescription>Hash ada di halaman kuitansi pesanan Anda.</FieldDescription>}
                         </Field>
                     </form>
 

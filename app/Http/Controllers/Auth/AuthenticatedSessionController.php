@@ -14,8 +14,14 @@ class AuthenticatedSessionController extends Controller
     /**
      * Display the login view.
      */
-    public function create(): \Inertia\Response
+    public function create(Request $request): \Inertia\Response
     {
+        // ?redirect=/products/30 dari tombol "Masuk untuk membeli": hanya path lokal, bukan //host.
+        $redirect = $request->query('redirect');
+        if (is_string($redirect) && str_starts_with($redirect, '/') && ! str_starts_with($redirect, '//') && ! str_contains($redirect, '\\')) {
+            $request->session()->put('url.intended', url($redirect));
+        }
+
         return \Inertia\Inertia::render('auth/user-login', ['status' => session('status')]);
     }
 

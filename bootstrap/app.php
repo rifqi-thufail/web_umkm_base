@@ -13,9 +13,15 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->web(append: [
+            \App\Http\Middleware\SecurityHeaders::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
+
+        // Penjual yang belum masuk diarahkan ke login penjual, bukan halaman pilihan.
+        $middleware->redirectGuestsTo(fn (\Illuminate\Http\Request $request) => $request->is('seller', 'seller/*')
+            ? route('seller.login')
+            : route('login'));
 
         $middleware->alias([
             'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class,
