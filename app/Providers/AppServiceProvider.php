@@ -23,6 +23,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Staging never touches real money: payment gateways stay in sandbox and Base anchoring
+        // is refused on mainnet (chain 8453), whatever the server .env says.
+        if ($this->app->environment('staging')) {
+            config(['midtrans.is_production' => false, 'doku.is_production' => false]);
+            if ((int) config('blockchain.base.chain_id') === 8453) {
+                config(['blockchain.base.enabled' => false]);
+            }
+        }
+
         // Wallet transfers also require the account password, so this mainly slows password guessing.
         RateLimiter::for('wallet-send', fn (Request $request) => [
             Limit::perMinute(5)->by('wallet-send:' . $request->user()?->id),

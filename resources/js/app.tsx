@@ -13,7 +13,17 @@ createInertiaApp({
         return ((await page()) as { default: never }).default;
     },
     setup({ el, App, props }) {
-        createRoot(el).render(<App {...props} />);
+        const env = props.initialPage.props.appEnv as string | undefined;
+        createRoot(el).render(
+            <>
+                {env === 'staging' && (
+                    <div className="bg-amber-400 px-4 py-1 text-center text-xs font-medium text-amber-950">
+                        STAGING: data uji, pembayaran sandbox. Jangan pakai data atau kartu asli.
+                    </div>
+                )}
+                <App {...props} />
+            </>,
+        );
     },
     progress: { color: '#a3171f', delay: 150 },
 });

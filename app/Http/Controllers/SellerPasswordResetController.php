@@ -93,7 +93,9 @@ class SellerPasswordResetController extends Controller
 
         // No mail server in local development: show the code instead of making people dig through the log.
         // Also require a loopback client, so a misconfigured APP_ENV=local server never shows it.
-        if ($otpService->logsOnly() && app()->isLocal() && in_array($request->ip(), ['127.0.0.1', '::1'], true)) {
+        // Staging sits behind StagingGate, so testers without a real inbox can read the code on screen.
+        $devHost = app()->isLocal() && in_array($request->ip(), ['127.0.0.1', '::1'], true);
+        if ($otpService->logsOnly() && ($devHost || app()->environment('staging'))) {
             $redirect->with('dev_otp', $otp);
         }
 

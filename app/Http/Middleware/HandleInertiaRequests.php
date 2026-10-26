@@ -38,6 +38,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'appName' => config('app.name', 'AMPUH'),
+            'appEnv' => app()->environment(),
             'auth' => function () use ($request) {
                 $user = $request->user('web');
                 $seller = $request->user('seller');

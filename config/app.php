@@ -41,6 +41,9 @@ return [
 
     'debug' => (bool) env('APP_DEBUG', false),
 
+    // Shared key that opens a staging site (see App\Http\Middleware\StagingGate).
+    'staging_access_key' => env('STAGING_ACCESS_KEY', ''),
+
     /*
     |--------------------------------------------------------------------------
     | Application URL

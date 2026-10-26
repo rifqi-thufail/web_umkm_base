@@ -50,7 +50,7 @@ php artisan serve    # terminal 2 -> http://localhost:8000
 
 Akun demo: pembeli `test@example.com` / `password`, penjual `081234560001` / `password`.
 
-Detail blockchain: [blockchain/README.md](blockchain/README.md). Deploy production dan reverse proxy: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+Detail blockchain: [blockchain/README.md](blockchain/README.md). Deploy production dan reverse proxy: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Staging untuk UAT: [docs/STAGING.md](docs/STAGING.md).
 
 ## Struktur
 

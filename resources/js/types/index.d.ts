@@ -16,6 +16,7 @@ export type AuthSeller = { id: number; name: string; phone: string; avatar: stri
 
 export type SharedProps = {
     appName: string;
+    appEnv: string;
     auth: { user: AuthUser | null; seller: AuthSeller | null };
     cartCount: number;
     flash: { success?: string | null; error?: string | null; info?: string | null; warning?: string | null; status?: string | null };
