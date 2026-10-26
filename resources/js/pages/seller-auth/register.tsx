@@ -41,8 +41,8 @@ export default function SellerRegister() {
                 <FieldSet>
                     <FieldLegend>Akun</FieldLegend>
                     <FieldGroup>
-                        <TextField id="no_hp" label="Nomor HP" type="tel" autoComplete="tel" required value={form.data.no_hp} onChange={set('no_hp')} error={form.errors.no_hp} description="Dipakai untuk masuk dan menerima kode OTP." />
-                        <TextField id="email" label="Email" type="email" autoComplete="email" value={form.data.email} onChange={set('email')} error={form.errors.email} description="Opsional." />
+                        <TextField id="no_hp" label="Nomor HP" type="tel" autoComplete="tel" required value={form.data.no_hp} onChange={set('no_hp')} error={form.errors.no_hp} description="Dipakai untuk masuk." />
+                        <TextField id="email" label="Email" type="email" autoComplete="email" required value={form.data.email} onChange={set('email')} error={form.errors.email} description="Dipakai untuk menerima kode OTP reset password." />
                         <TextField id="password" label="Password" type="password" autoComplete="new-password" required value={form.data.password} onChange={set('password')} error={form.errors.password} />
                         <TextField id="password_confirmation" label="Ulangi password" type="password" autoComplete="new-password" required value={form.data.password_confirmation} onChange={set('password_confirmation')} error={form.errors.password_confirmation} />
                     </FieldGroup>

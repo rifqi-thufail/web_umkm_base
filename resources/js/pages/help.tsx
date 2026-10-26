@@ -53,7 +53,7 @@ const FAQ = [
     },
     {
         q: 'Lupa password penjual?',
-        a: <p>Gunakan “Lupa password” di halaman masuk penjual. Kode OTP 6 digit dikirim lewat SMS ke nomor HP toko dan berlaku 10 menit.</p>,
+        a: <p>Gunakan “Lupa password” di halaman masuk penjual. Kode OTP 6 digit dikirim ke email toko dan berlaku 10 menit.</p>,
     },
 ];
 

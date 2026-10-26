@@ -11,7 +11,7 @@ export default function SellerResetPassword({ no_hp, status, dev_otp }: { no_hp?
     const form = useForm({ no_hp: no_hp ?? '', otp: '', password: '', password_confirmation: '' });
 
     return (
-        <AuthLayout title="Reset password penjual" heading="Masukkan kode OTP" description="Kode dikirim lewat SMS dan berlaku 10 menit.">
+        <AuthLayout title="Reset password penjual" heading="Masukkan kode OTP" description="Kode dikirim ke email toko dan berlaku 10 menit.">
             {status && (
                 <Alert>
                     <AlertDescription>{status}</AlertDescription>
@@ -20,7 +20,7 @@ export default function SellerResetPassword({ no_hp, status, dev_otp }: { no_hp?
             {dev_otp && (
                 <Alert>
                     <AlertDescription>
-                        Mode lokal tanpa SMS gateway. Kode OTP: <span className="font-mono font-semibold tracking-widest">{dev_otp}</span>
+                        Mode lokal tanpa server email. Kode OTP: <span className="font-mono font-semibold tracking-widest">{dev_otp}</span>
                     </AlertDescription>
                 </Alert>
             )}
@@ -46,9 +46,9 @@ export default function SellerResetPassword({ no_hp, status, dev_otp }: { no_hp?
                             <FieldError>{form.errors.otp}</FieldError>
                         ) : (
                             <FieldDescription>
-                                Tidak menerima SMS?{' '}
+                                Tidak menerima email? Cek folder spam, atau{' '}
                                 <Link href={route('seller.password.request')} className="underline underline-offset-4">
-                                    Kirim ulang
+                                    kirim ulang
                                 </Link>
                             </FieldDescription>
                         )}

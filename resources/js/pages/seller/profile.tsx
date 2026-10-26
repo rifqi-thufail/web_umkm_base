@@ -72,7 +72,7 @@ export default function SellerProfile({ seller }: { seller: Seller & { email: st
                         <TextField id="alamat_toko" label="Alamat lengkap" value={text('alamat_toko')} onChange={set('alamat_toko')} error={form.errors.alamat_toko} />
                         <div className="grid gap-4 sm:grid-cols-2">
                             <TextField id="no_hp" label="Nomor HP" type="tel" required value={text('no_hp')} onChange={set('no_hp')} error={form.errors.no_hp} description="Juga dipakai untuk masuk." />
-                            <TextField id="email" label="Email" type="email" value={text('email')} onChange={set('email')} error={form.errors.email} />
+                            <TextField id="email" label="Email" type="email" required description="Kode OTP reset password dikirim ke email ini." value={text('email')} onChange={set('email')} error={form.errors.email} />
                         </div>
                     </FieldGroup>
                 </FieldSet>

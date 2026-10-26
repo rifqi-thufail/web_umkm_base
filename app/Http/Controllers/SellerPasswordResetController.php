@@ -18,7 +18,7 @@ use Illuminate\View\View;
 
 class SellerPasswordResetController extends Controller
 {
-    /** OTPs one seller account (or one destination phone) can be sent per window. */
+    /** OTPs one seller account (or one destination email) can be sent per window. */
     private const ACCOUNT_ISSUE_LIMIT = 5;
 
     /** Wrong OTP guesses allowed per seller account per window, across all OTPs. */
@@ -43,11 +43,17 @@ class SellerPasswordResetController extends Controller
 
         $seller = Seller::query()->where('no_hp', '=', (string) $request->input('no_hp'))->firstOrFail();
 
+        if (! $seller->email) {
+            throw ValidationException::withMessages([
+                'no_hp' => 'Akun ini belum punya email untuk menerima kode OTP. Hubungi admin AMPUH untuk reset password.',
+            ]);
+        }
+
         // Per-account and per-destination budgets: neither rotating IPs nor re-spelling the
-        // number (0812... / +62812...) buys more OTPs for the same seller or the same phone.
+        // address buys more OTPs for the same seller or the same inbox.
         $accountKeys = [
             $this->sellerIssueKey($seller),
-            'seller-otp-issue-dest:'.$otpService->normalizePhone((string) $seller->no_hp),
+            'seller-otp-issue-dest:'.$otpService->normalizeEmail((string) $seller->email),
         ];
         foreach ($accountKeys as $key) {
             $this->ensureKeyNotLimited($request, $key, self::ACCOUNT_ISSUE_LIMIT, 'no_hp');
@@ -83,9 +89,9 @@ class SellerPasswordResetController extends Controller
 
         $request->session()->put('seller_password_reset_no_hp', $seller->no_hp);
 
-        $redirect = redirect()->route('seller.password.reset')->with('status', 'Kode OTP reset password sudah dikirim ke nomor HP seller.');
+        $redirect = redirect()->route('seller.password.reset')->with('status', 'Kode OTP reset password sudah dikirim ke '.$this->maskEmail((string) $seller->email).'.');
 
-        // No gateway in local development: show the code instead of making people dig through the log.
+        // No mail server in local development: show the code instead of making people dig through the log.
         // Also require a loopback client, so a misconfigured APP_ENV=local server never shows it.
         if ($otpService->logsOnly() && app()->isLocal() && in_array($request->ip(), ['127.0.0.1', '::1'], true)) {
             $redirect->with('dev_otp', $otp);
@@ -213,6 +219,16 @@ class SellerPasswordResetController extends Controller
                 'minutes' => (int) ceil($seconds / 60),
             ]),
         ]);
+    }
+
+    /**
+     * toko@example.com -> t***@example.com, so the reset page does not disclose the address.
+     */
+    protected function maskEmail(string $email): string
+    {
+        [$local, $domain] = array_pad(explode('@', $email, 2), 2, '');
+
+        return mb_substr($local, 0, 1).'***@'.$domain;
     }
 
     protected function sellerIssueKey(Seller $seller): string

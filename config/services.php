@@ -43,26 +43,4 @@ return [
         'ipn_secret' => env('COINPAYMENTS_IPN_SECRET'),
     ],
 
-    'sms' => [
-        // zenziva | fonnte | twilio | generic | log (empty: generic if SMS_GATEWAY_URL is set, else log)
-        'driver' => env('SMS_DRIVER'),
-        'gateway_url' => env('SMS_GATEWAY_URL'),
-        // generic: bearer token. fonnte: device token.
-        'token' => env('SMS_GATEWAY_TOKEN'),
-        'sender_id' => env('SMS_SENDER_ID'),
-        'zenziva' => [
-            'url' => env('ZENZIVA_URL', 'https://console.zenziva.net/reguler/api/sendsms/'),
-            'userkey' => env('ZENZIVA_USERKEY'),
-            'passkey' => env('ZENZIVA_PASSKEY'),
-        ],
-        'fonnte' => [
-            'url' => env('FONNTE_URL', 'https://api.fonnte.com/send'),
-        ],
-        'twilio' => [
-            'sid' => env('TWILIO_SID'),
-            'token' => env('TWILIO_AUTH_TOKEN'),
-            'from' => env('TWILIO_FROM'),
-        ],
-    ],
-
 ];

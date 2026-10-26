@@ -29,7 +29,7 @@ class SellerRegisterController extends Controller
     {
         $request->validate([
             'nama_koperasi' => ['required', 'string', 'max:255'],
-            'email' => ['nullable', 'string', 'email', 'max:255', 'unique:'.Seller::class],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:'.Seller::class],
             'no_hp' => ['required', 'string', 'max:20', 'unique:'.Seller::class],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'kecamatan' => ['required', 'string', 'max:255'],
@@ -39,7 +39,7 @@ class SellerRegisterController extends Controller
 
         $seller = Seller::create([
             'nama_koperasi' => $request->nama_koperasi,
-            'email' => $request->filled('email') ? $request->email : null,
+            'email' => $request->email,
             'password' => Hash::make($request->password),
             'kecamatan' => $request->kecamatan,
             'desa_kelurahan' => $request->desa_kelurahan,

@@ -72,7 +72,7 @@ resources/css/app.css     Token warna dan tipografi (merah-putih + biru Base khu
 | `BASE_*` | RPC, chain id, alamat kontrak, kunci recorder. Lihat `blockchain/README.md`. |
 | `MIDTRANS_*` | Server/client key Midtrans. Webhook: `POST /api/midtrans/callback`. |
 | `COINPAYMENTS_*` | Kredensial CoinPayments. IPN: `POST /api/coinpayments/ipn`. |
-| `SMS_GATEWAY_*` | Pengiriman OTP reset password penjual. |
+| `MAIL_*` | SMTP untuk OTP reset password penjual (dikirim ke email toko). |
 | `DOKU_*` | Legacy, hanya jika DOKU masih dipakai. |
 
 ## Perintah berguna

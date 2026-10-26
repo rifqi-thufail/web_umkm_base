@@ -8,7 +8,7 @@ export default function SellerForgotPassword({ no_hp }: { no_hp?: string | null 
     const form = useForm({ no_hp: no_hp ?? '' });
 
     return (
-        <AuthLayout title="Lupa password penjual" heading="Atur ulang password toko" description="Kami kirim kode OTP 6 digit lewat SMS ke nomor HP toko.">
+        <AuthLayout title="Lupa password penjual" heading="Atur ulang password toko" description="Masukkan nomor HP toko. Kami kirim kode OTP 6 digit ke email yang terdaftar di akun.">
             <form className="flex flex-col gap-6" onSubmit={(e) => { e.preventDefault(); form.post(route('seller.password.email')); }}>
                 <TextField id="no_hp" label="Nomor HP toko" type="tel" autoComplete="tel" autoFocus required value={form.data.no_hp} onChange={(v) => form.setData('no_hp', v)} error={form.errors.no_hp} />
                 <Button type="submit" size="lg" disabled={form.processing}>

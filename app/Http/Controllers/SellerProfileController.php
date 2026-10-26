@@ -54,7 +54,7 @@ class SellerProfileController extends Controller
 
         $data = $request->validate([
             'nama_koperasi' => 'required|string|max:255',
-            'email' => 'nullable|string|email|max:255|unique:sellers,email,' . $seller->id,
+            'email' => 'required|string|email|max:255|unique:sellers,email,' . $seller->id,
             'no_hp' => 'required|string|max:20|unique:sellers,no_hp,' . $seller->id,
             'kecamatan' => 'required|string|max:255',
             'desa_kelurahan' => 'required|string|max:255',
