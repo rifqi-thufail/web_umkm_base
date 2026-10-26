@@ -16,6 +16,10 @@ class SecurityHeaders
         $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
 
+        // Don't advertise the exact PHP build to version scanners.
+        header_remove('X-Powered-By');
+        $response->headers->remove('X-Powered-By');
+
         // Only production may be indexed; staging and local stay out of search results.
         if (! app()->isProduction()) {
             $response->headers->set('X-Robots-Tag', 'noindex, nofollow');

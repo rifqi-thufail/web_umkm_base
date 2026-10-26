@@ -3,10 +3,13 @@
     "name": "laravel/laravel",
     "type": "project",
     "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "keywords": [
+        "laravel",
+        "framework"
+    ],
     "license": "MIT",
     "require": {
-        "php": "^8.2",
+        "php": "^8.4.27",
         "doku/doku-php-library": "^1.0",
         "guzzlehttp/guzzle": "^7.10",
         "inertiajs/inertia-laravel": "^3.4",
@@ -78,6 +81,13 @@
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true
+        },
+        "policy": {
+            "advisories": {
+                "ignore-id": {
+                    "PKSA-y2cr-5h3j-g3ys": "CVE-2025-45769 (disputed, key-length advice). doku/doku-php-library pins firebase/php-jwt ^6 and only uses RS256 with DOKU's keys."
+                }
+            }
         }
     },
     "minimum-stability": "stable",
