@@ -1,0 +1,80 @@
+name: Deploy
+
+# Push to master: CI -> staging (automatic, once STAGING_DEPLOY=true) -> production (waits for
+# approval on the "production" environment). Manual runs can target either environment.
+# Setup: docs/CI_CD.md
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Environment to deploy
+        type: choice
+        options: [staging, production]
+        default: staging
+      seed_demo:
+        description: Staging only - load demo stores, products and test logins
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  staging:
+    name: Deploy staging
+    needs: ci
+    if: >-
+      (github.event_name == 'push' && vars.STAGING_DEPLOY == 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.target == 'staging')
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.ampuh.finance
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - uses: ./.github/actions/hostinger-ssh
+        with:
+          ssh-key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          known-hosts: ${{ secrets.HOSTINGER_KNOWN_HOSTS }}
+      - run: scripts/deploy-hostinger.sh staging ${{ inputs.seed_demo && '--seed-demo' || '' }}
+
+  production:
+    name: Deploy production
+    needs: [ci, staging]
+    # Runs after staging succeeds, or after a skipped staging while staging is not set up yet.
+    if: >-
+      !cancelled() && needs.ci.result == 'success' && needs.staging.result != 'failure' &&
+      (github.event_name == 'push' ||
+       (github.event_name == 'workflow_dispatch' && inputs.target == 'production'))
+    runs-on: ubuntu-latest
+    environment:
+      name: production # required reviewers on this environment = the approval gate
+      url: https://ampuh.finance
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - uses: ./.github/actions/hostinger-ssh
+        with:
+          ssh-key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          known-hosts: ${{ secrets.HOSTINGER_KNOWN_HOSTS }}
+      - run: scripts/deploy-hostinger.sh production

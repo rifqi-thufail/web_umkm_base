@@ -1,0 +1,25 @@
+name: Hostinger SSH
+description: Load the deploy key and pin the Hostinger host key for scripts/deploy-hostinger.sh
+inputs:
+  ssh-key:
+    description: Private deploy key (HOSTINGER_SSH_KEY secret)
+    required: true
+  known-hosts:
+    description: Output of ssh-keyscan -p 65002 153.92.10.3 (HOSTINGER_KNOWN_HOSTS secret)
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        SSH_KEY: ${{ inputs.ssh-key }}
+        KNOWN_HOSTS: ${{ inputs.known-hosts }}
+      run: |
+        [ -n "$SSH_KEY" ] || { echo "::error::HOSTINGER_SSH_KEY secret is not set (docs/CI_CD.md)"; exit 1; }
+        [ -n "$KNOWN_HOSTS" ] || { echo "::error::HOSTINGER_KNOWN_HOSTS secret is not set (docs/CI_CD.md)"; exit 1; }
+        mkdir -p ~/.ssh && chmod 700 ~/.ssh
+        printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+        eval "$(ssh-agent -s)"
+        printf '%s\n' "$SSH_KEY" | ssh-add -
+        echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+        echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
