@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Product;
+use App\Models\Seller;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -48,5 +50,24 @@ class UatFixesTest extends TestCase
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('X-Frame-Options', 'SAMEORIGIN')
             ->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    }
+
+    private function seller(string $name = 'Koperasi Maju'): Seller
+    {
+        return Seller::create([
+            'nama_koperasi' => $name, 'password' => 'password', 'kecamatan' => 'Tamalanrea',
+            'desa_kelurahan' => 'Tamalanrea', 'jenis_usaha' => 'Pangan', 'no_hp' => '0811'.random_int(1000, 9999),
+        ]);
+    }
+
+    public function test_catalog_audit_lists_test_sellers_and_products_without_photos(): void
+    {
+        $tester = $this->seller('Testing_Produk');
+        Product::create(['seller_id' => $tester->id, 'nama_produk' => 'Kopi', 'harga' => 30, 'stok' => 1]);
+
+        $this->artisan('catalog:audit')
+            ->expectsOutputToContain('Test-looking sellers: 1')
+            ->expectsOutputToContain('Products without a photo: 1 of 1')
+            ->assertSuccessful();
     }
 }
