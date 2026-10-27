@@ -25,8 +25,9 @@ class DashboardController extends Controller
                 'revenue_month' => (int) (clone $paid)->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->sum('total_price'),
                 'anchored' => (clone $paid)->where('blockchain_status', 'confirmed')->count(),
             ],
-            'recentOrders' => $seller->orders()
+            'recentOrders' => (clone $paid)
                 ->with(['user', 'orderItems.product.primaryImage'])
+                ->latest('paid_at')
                 ->latest()
                 ->take(5)
                 ->get()

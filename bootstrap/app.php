@@ -31,5 +31,23 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        // Branded error pages for browser visits; JSON callers (webhooks, API) keep plain responses.
+        $exceptions->respond(function (\Symfony\Component\HttpFoundation\Response $response, \Throwable $e, \Illuminate\Http\Request $request) {
+            $status = $response->getStatusCode();
+
+            if ($request->expectsJson() || $request->is('api/*', 'up')) {
+                return $response;
+            }
+
+            // Expired CSRF token (a tab left open too long): go back with a hint instead of a 419 page.
+            if ($status === 419) {
+                return back()->with('error', 'Sesi Anda berakhir. Silakan coba lagi.');
+            }
+
+            if (in_array($status, [403, 404, 429, 503], true) || ($status === 500 && ! config('app.debug'))) {
+                return \Inertia\Inertia::render('error', ['status' => $status])->toResponse($request)->setStatusCode($status);
+            }
+
+            return $response;
+        });
     })->create();

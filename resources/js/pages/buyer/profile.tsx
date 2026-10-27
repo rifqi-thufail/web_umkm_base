@@ -87,7 +87,7 @@ export default function Profile({ profile }: { profile: Profile }) {
 
                     <Separator />
 
-                    <Section title="Hapus akun" description="Riwayat pesanan dan wishlist ikut terhapus. Kuitansi di Base tetap ada karena tidak bisa dihapus.">
+                    <Section title="Hapus akun" description="Data pribadi, keranjang, dan wishlist Anda dihapus. Pesanan yang pernah dibuat tetap tersimpan tanpa nama Anda untuk pembukuan penjual, dan kuitansi di Base tidak bisa dihapus.">
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
                                 <Button variant="destructive" className="self-start">Hapus akun</Button>

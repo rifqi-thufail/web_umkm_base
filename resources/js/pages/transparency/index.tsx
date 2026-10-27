@@ -32,12 +32,12 @@ export default function TransparencyIndex({ transactions, stats, network, filter
                 description="Setiap pesanan yang lunas punya sidik jari yang disimpan di jaringan Base. Nama pembeli tidak ditampilkan."
             >
                 <div className="flex flex-col gap-8">
-                    <dl className="grid grid-cols-3 gap-4 border-y py-5">
+                    <dl className="grid grid-cols-2 gap-4 border-y py-5 sm:grid-cols-3">
                         <div className="flex flex-col gap-1">
                             <dt className="text-xs text-muted-foreground sm:text-sm">Transaksi tercatat</dt>
                             <dd className="font-heading text-2xl font-bold tabular sm:text-3xl">{stats.total_transactions.toLocaleString('id-ID')}</dd>
                         </div>
-                        <div className="flex flex-col gap-1">
+                        <div className="order-last col-span-2 flex flex-col gap-1 sm:order-none sm:col-span-1">
                             <dt className="text-xs text-muted-foreground sm:text-sm">Nilai total</dt>
                             <dd className="font-heading text-2xl font-bold sm:text-3xl">{formatRupiah(stats.total_amount)}</dd>
                         </div>
@@ -78,11 +78,11 @@ export default function TransparencyIndex({ transactions, stats, network, filter
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>Pesanan</TableHead>
-                                            <TableHead>Penjual</TableHead>
+                                            <TableHead className="hidden md:table-cell">Penjual</TableHead>
                                             <TableHead className="text-right">Total</TableHead>
-                                            <TableHead className="text-right">Blok</TableHead>
-                                            <TableHead>Transaksi Base</TableHead>
-                                            <TableHead>Status</TableHead>
+                                            <TableHead className="hidden text-right sm:table-cell">Blok</TableHead>
+                                            <TableHead className="hidden sm:table-cell">Transaksi Base</TableHead>
+                                            <TableHead className="hidden sm:table-cell">Status</TableHead>
                                             <TableHead className="sr-only">Detail</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -95,11 +95,11 @@ export default function TransparencyIndex({ transactions, stats, network, filter
                                                         <span className="text-xs text-muted-foreground">{formatDate(t.chain.anchored_at, true)}</span>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="max-w-48 truncate">{t.seller}</TableCell>
+                                                <TableCell className="hidden max-w-48 truncate md:table-cell">{t.seller}</TableCell>
                                                 <TableCell className="text-right font-medium tabular">{formatRupiah(t.total)}</TableCell>
-                                                <TableCell className="text-right font-mono text-xs tabular">{t.chain.block?.toLocaleString('id-ID')}</TableCell>
-                                                <TableCell>{t.chain.tx_hash && <CopyHash value={t.chain.tx_hash} />}</TableCell>
-                                                <TableCell>
+                                                <TableCell className="hidden text-right font-mono text-xs tabular sm:table-cell">{t.chain.block?.toLocaleString('id-ID')}</TableCell>
+                                                <TableCell className="hidden sm:table-cell">{t.chain.tx_hash && <CopyHash value={t.chain.tx_hash} />}</TableCell>
+                                                <TableCell className="hidden sm:table-cell">
                                                     <ChainStatusBadge status={t.chain.status} />
                                                 </TableCell>
                                                 <TableCell className="text-right">
