@@ -20,9 +20,11 @@ export function OrderRow({ order, href }: { order: Order; href: string }) {
             </div>
             <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="font-mono text-xs font-medium">#{shortOrder(order.number)}</span>
+                    <span className="flex items-center gap-1.5 font-mono text-xs font-medium">
+                        #{shortOrder(order.number)}
+                        {order.chain.status === 'confirmed' && <BaseGlyph label="Tercatat di Base" />}
+                    </span>
                     <OrderStatusBadge order={order} />
-                    {order.chain.status === 'confirmed' && <BaseGlyph aria-label="Tercatat di Base" />}
                 </div>
                 <p className="truncate text-sm">
                     {items[0]?.name}

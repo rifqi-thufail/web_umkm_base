@@ -41,8 +41,8 @@ class CartController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'quantity' => 'required|integer|min:1',
+            'product_id' => ['required', \Illuminate\Validation\Rule::exists('products', 'id')->whereNull('deleted_at')],
+            'quantity' => 'required|integer|min:1|max:1000',
         ]);
 
         $product = Product::findOrFail($request->product_id);
@@ -85,8 +85,14 @@ class CartController extends Controller
             abort(403);
         }
 
-        $request->validate(['quantity' => 'required|integer|min:1']);
-        
+        $request->validate(['quantity' => 'required|integer|min:1|max:1000']);
+
+        if (! $item->product) {
+            $item->delete();
+
+            return back()->with('error', 'Produk ini sudah tidak dijual dan dihapus dari keranjang.');
+        }
+
         if ($item->product->stok < $request->quantity) {
             return back()->with('error', 'Stok tidak mencukupi!');
         }

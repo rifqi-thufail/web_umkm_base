@@ -20,11 +20,11 @@ type Props = {
 
 const GATEWAYS = [
     { value: 'midtrans', icon: CreditCardIcon, title: 'Midtrans', body: 'Transfer bank, virtual account, GoPay, OVO, DANA, kartu, atau minimarket.' },
-    { value: 'coinpayments', icon: BitcoinIcon, title: 'Kripto (CoinPayments)', body: 'Bayar dengan USDC, ETH, atau BTC. Anda akan diarahkan ke halaman CoinPayments.' },
+    { value: 'coinpayments', icon: BitcoinIcon, title: 'Kripto (CoinPayments)', body: 'Bayar dengan aset kripto yang tersedia di CoinPayments. Anda akan diarahkan ke halaman pembayaran CoinPayments.' },
 ] as const;
 
 export default function Checkout({ items, buyer, gateways }: Props) {
-    const form = useForm({ payment_gateway: 'midtrans' });
+    const form = useForm({ payment_gateway: gateways.midtrans || !gateways.coinpayments ? 'midtrans' : 'coinpayments' });
     const total = items.reduce((n, i) => n + i.quantity * i.product.price, 0);
     const groups = groupBySeller(items);
 
@@ -52,8 +52,13 @@ export default function Checkout({ items, buyer, gateways }: Props) {
                                 <p className="text-muted-foreground">{buyer.address ?? 'Alamat belum diisi'}</p>
                             </div>
                             {!buyer.address && (
-                                <Alert>
-                                    <AlertDescription>Tambahkan alamat di profil supaya penjual bisa mengirim pesanan.</AlertDescription>
+                                <Alert variant="destructive">
+                                    <AlertDescription>
+                                        Alamat pengiriman wajib diisi sebelum membayar.{' '}
+                                        <Link href={route('profile.edit')} className="font-medium underline underline-offset-4">
+                                            Isi alamat di profil
+                                        </Link>
+                                    </AlertDescription>
                                 </Alert>
                             )}
                         </section>
@@ -105,7 +110,7 @@ export default function Checkout({ items, buyer, gateways }: Props) {
                             Setelah lunas, {groups.length > 1 ? `${groups.length} kuitansi` : 'kuitansi'} dicatat di jaringan Base.
                         </p>
                         {form.errors.payment_gateway && <p className="text-sm text-destructive">{form.errors.payment_gateway}</p>}
-                        <Button type="submit" size="lg" disabled={form.processing || !gateways[form.data.payment_gateway as 'midtrans']}>
+                        <Button type="submit" size="lg" disabled={form.processing || !buyer.address || !gateways[form.data.payment_gateway as 'midtrans']}>
                             {form.processing && <Spinner data-icon="inline-start" />}
                             Bayar {formatRupiah(total)}
                         </Button>

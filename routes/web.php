@@ -61,9 +61,12 @@ Route::middleware('auth:web')->group(function () {
     Route::delete('/cart/item/{item}', [CartController::class, 'destroy'])->name('cart.destroy');
 
     Route::get('/checkout', [OrderController::class, 'checkout'])->name('orders.checkout');
-    Route::post('/orders/process', [OrderController::class, 'process'])->name('orders.process');
+    Route::post('/orders/process', [OrderController::class, 'process'])->middleware('throttle:10,1')->name('orders.process');
+    Route::get('/bayar/{reference}', [OrderController::class, 'pay'])->where('reference', 'PAY-[0-9a-f-]{36}')->name('orders.pay');
     Route::get('/riwayat-pesanan', [OrderController::class, 'index'])->name('orders.index');
     Route::get('/riwayat-pesanan/{order}', [OrderController::class, 'show'])->name('orders.show');
+    Route::post('/riwayat-pesanan/{order}/selesai', [OrderController::class, 'complete'])->name('orders.complete');
+    Route::post('/riwayat-pesanan/{order}/pesan-ulang', [OrderController::class, 'reorder'])->name('orders.reorder');
 });
 
 // --- Penjual ---
@@ -72,7 +75,7 @@ Route::prefix('seller')->name('seller.')->group(function () {
         Route::get('login', [SellerLoginController::class, 'create'])->name('login');
         Route::post('login', [SellerLoginController::class, 'store']);
         Route::get('register', [SellerRegisterController::class, 'create'])->name('register');
-        Route::post('register', [SellerRegisterController::class, 'store']);
+        Route::post('register', [SellerRegisterController::class, 'store'])->middleware('throttle:6,1');
         Route::get('forgot-password', [SellerPasswordResetController::class, 'create'])->name('password.request');
         Route::post('forgot-password', [SellerPasswordResetController::class, 'store'])->name('password.email');
         Route::get('reset-password', [SellerPasswordResetController::class, 'edit'])->name('password.reset');
@@ -96,6 +99,7 @@ Route::prefix('seller')->name('seller.')->group(function () {
 
         Route::middleware('seller.active')->group(function () {
             Route::get('/orders', [SellerOrderController::class, 'index'])->name('orders.index');
+            Route::post('/orders/{order}/ship', [SellerOrderController::class, 'ship'])->name('orders.ship');
         });
     });
 });

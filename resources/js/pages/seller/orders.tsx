@@ -1,12 +1,32 @@
-import { InboxIcon } from 'lucide-react';
+import { router } from '@inertiajs/react';
+import { InboxIcon, TruckIcon } from 'lucide-react';
+import { useState } from 'react';
 import { BaseGlyph, CopyHash } from '@/components/chain-proof';
 import { OrderStatusBadge } from '@/components/order-status';
 import { Pager } from '@/components/pager';
 import { ProductImage } from '@/components/product-card';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { SellerLayout } from '@/layouts/seller-layout';
 import { formatDate, formatRupiah, shortOrder } from '@/lib/format';
 import type { Order, Paginated } from '@/types';
+
+function ShipButton({ order }: { order: Order }) {
+    const [busy, setBusy] = useState(false);
+    return (
+        <Button
+            size="sm"
+            disabled={busy}
+            onClick={() =>
+                router.post(route('seller.orders.ship', order.id), {}, { preserveScroll: true, onStart: () => setBusy(true), onFinish: () => setBusy(false) })
+            }
+        >
+            {busy ? <Spinner data-icon="inline-start" /> : <TruckIcon data-icon="inline-start" />}
+            Tandai dikirim
+        </Button>
+    );
+}
 
 export default function SellerOrders({ orders }: { orders: Paginated<Order> }) {
     return (
@@ -14,7 +34,7 @@ export default function SellerOrders({ orders }: { orders: Paginated<Order> }) {
             <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
                 <div className="flex flex-col gap-1">
                     <h1 className="text-2xl font-bold sm:text-3xl">Pesanan</h1>
-                    <p className="text-muted-foreground">Hanya pesanan yang sudah dibayar. Kirim sesuai alamat pembeli.</p>
+                    <p className="text-muted-foreground">Hanya pesanan yang sudah dibayar. Kirim ke alamat pembeli, lalu tandai dikirim.</p>
                 </div>
 
                 {orders.data.length ? (
@@ -26,7 +46,7 @@ export default function SellerOrders({ orders }: { orders: Paginated<Order> }) {
                                         <span className="font-mono text-sm font-medium">#{shortOrder(o.number)}</span>
                                         <OrderStatusBadge order={o} />
                                     </div>
-                                    <span className="text-sm text-muted-foreground">{formatDate(o.created_at, true)}</span>
+                                    <span className="text-sm text-muted-foreground">Dibayar {formatDate(o.paid_at ?? o.created_at, true)}</span>
                                 </div>
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_16rem]">
                                     <ul className="flex flex-col gap-2">
@@ -55,7 +75,10 @@ export default function SellerOrders({ orders }: { orders: Paginated<Order> }) {
                                     ) : (
                                         <span className="text-sm text-muted-foreground">Belum tercatat di Base</span>
                                     )}
-                                    <span className="font-heading text-lg font-bold">{formatRupiah(o.total)}</span>
+                                    <div className="flex items-center gap-4">
+                                        <span className="font-heading text-lg font-bold">{formatRupiah(o.total)}</span>
+                                        {o.status === 'processing' && <ShipButton order={o} />}
+                                    </div>
                                 </div>
                             </article>
                         ))}

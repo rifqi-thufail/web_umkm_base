@@ -53,8 +53,8 @@ class ProductController extends Controller
             'category_id' => 'required|exists:categories,id',
             'nama_produk' => 'required|string|max:255',
             'deskripsi' => 'nullable|string',
-            'harga' => 'required|numeric|min:0',
-            'stok' => 'required|integer|min:0',
+            'harga' => 'required|integer|min:1|max:1000000000',
+            'stok' => 'required|integer|min:0|max:1000000',
             'images' => 'required|array|min:1|max:5',
             'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:2048',
         ], [
@@ -64,14 +64,16 @@ class ProductController extends Controller
             'images.*.image' => 'File harus berupa gambar',
             'images.*.mimes' => 'Format gambar harus: jpeg, png, jpg, gif, atau webp',
             'images.*.max' => 'Ukuran gambar maksimal 2MB',
-        ]);        DB::beginTransaction();
+        ]);
+
+        DB::beginTransaction();
         try {
             // Buat produk
             $product = Product::create([
                 'seller_id' => $seller->id,
                 'category_id' => $validated['category_id'],
                 'nama_produk' => $validated['nama_produk'],
-                'deskripsi' => $validated['deskripsi'],
+                'deskripsi' => $validated['deskripsi'] ?? null,
                 'harga' => $validated['harga'],
                 'stok' => $validated['stok'],
             ]);
@@ -105,7 +107,9 @@ class ProductController extends Controller
                 }
             }
             
-            return back()->withInput()->with('error', 'Gagal menambahkan produk: ' . $e->getMessage());
+            Log::error('Product create failed', ['seller_id' => $seller->id, 'error' => $e->getMessage()]);
+
+            return back()->withInput()->with('error', 'Gagal menambahkan produk. Silakan coba lagi.');
         }
     }
 
@@ -135,10 +139,10 @@ class ProductController extends Controller
         
         $validated = $request->validate([
             'nama_produk' => 'required|string|max:255',
-            'category_id' => 'nullable|exists:categories,id',
+            'category_id' => 'required|exists:categories,id',
             'deskripsi' => 'nullable|string',
-            'harga' => 'required|numeric|min:0',
-            'stok' => 'required|integer|min:0',
+            'harga' => 'required|integer|min:1|max:1000000000',
+            'stok' => 'required|integer|min:0|max:1000000',
             'images' => 'nullable|array|max:5',
             'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:2048',
         ], [
@@ -154,7 +158,7 @@ class ProductController extends Controller
             $product->update([
                 'category_id' => $validated['category_id'],
                 'nama_produk' => $validated['nama_produk'],
-                'deskripsi' => $validated['deskripsi'],
+                'deskripsi' => $validated['deskripsi'] ?? null,
                 'harga' => $validated['harga'],
                 'stok' => $validated['stok'],
             ]);
@@ -192,7 +196,9 @@ class ProductController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withInput()->with('error', 'Gagal mengupdate produk: ' . $e->getMessage());
+            Log::error('Product update failed', ['product_id' => $product->id, 'error' => $e->getMessage()]);
+
+            return back()->withInput()->with('error', 'Gagal menyimpan produk. Silakan coba lagi.');
         }
     }
 
@@ -206,25 +212,13 @@ class ProductController extends Controller
             abort(403, 'Unauthorized action.');
         }
         
-        DB::beginTransaction();
-        try {
-            // Hapus semua gambar dari storage
-            foreach ($product->images as $image) {
-                Storage::disk('public')->delete($image->image_path);
-            }
+        // Soft delete: the product leaves the catalog, carts and wishlists, but paid orders (and
+        // their Base fingerprints) keep their items and photos.
+        $product->delete();
+        \App\Models\CartItem::where('product_id', $product->id)->delete();
+        \App\Models\Wishlist::where('product_id', $product->id)->delete();
 
-            // Hapus produk (images akan terhapus otomatis karena onDelete cascade)
-            $product->delete();
-
-            DB::commit();
-
-            return redirect()->route('seller.products.index')
-                ->with('success', 'Produk dan semua gambar berhasil dihapus');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Gagal menghapus produk: ' . $e->getMessage());
-        }
+        return redirect()->route('seller.products.index')->with('success', 'Produk dihapus dari katalog.');
     }
 
     /**
@@ -296,7 +290,9 @@ class ProductController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Gagal menghapus gambar: ' . $e->getMessage());
+            Log::error('Product image delete failed', ['image_id' => $image->id, 'error' => $e->getMessage()]);
+
+            return back()->with('error', 'Gagal menghapus gambar. Silakan coba lagi.');
         }
     }
 }

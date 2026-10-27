@@ -78,6 +78,7 @@ export type Order = {
     payment_status_label: string;
     gateway: string | null;
     created_at: string;
+    paid_at: string | null;
     seller: { id: number; name: string } | null;
     buyer: { name: string; phone: string; address?: string } | null;
     chain: ChainInfo;
