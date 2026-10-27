@@ -17,7 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\SecurityHeaders::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
-            \App\Http\Middleware\AnchorPendingOrders::class,
+            \App\Http\Middleware\SweepPendingWork::class,
         ]);
 
         // Penjual yang belum masuk diarahkan ke login penjual, bukan halaman pilihan.

@@ -27,10 +27,11 @@ Route::redirect('/landing', '/');
 Route::get('/products/{product}', [HomeController::class, 'show'])->name('products.show');
 
 // --- Verifikasi & transparansi (Base) ---
-Route::get('/verifikasi', [BlockchainController::class, 'verify'])->name('blockchain.verify');
+// Both pages call the Base RPC on every visit, so they are rate limited.
+Route::get('/verifikasi', [BlockchainController::class, 'verify'])->middleware('throttle:30,1')->name('blockchain.verify');
 Route::redirect('/blockchain/verify', '/verifikasi');
 Route::get('/transparansi', [PublicTransactionController::class, 'index'])->name('public.transactions.index');
-Route::get('/transparansi/{hash}', [PublicTransactionController::class, 'show'])->name('public.transactions.show');
+Route::get('/transparansi/{hash}', [PublicTransactionController::class, 'show'])->middleware('throttle:30,1')->name('public.transactions.show');
 Route::redirect('/transparency/transactions', '/transparansi');
 Route::get('/api/public/transactions', [PublicTransactionController::class, 'api'])->name('public.transactions.api');
 

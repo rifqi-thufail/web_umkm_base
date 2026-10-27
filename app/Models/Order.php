@@ -253,6 +253,14 @@ class Order extends Model
         return ['success' => false, 'error' => $error, 'data_hash' => $dataHash];
     }
 
+    /** Unpaid checkouts whose payment window has passed, oldest first. */
+    public function scopeStaleCheckouts($query)
+    {
+        return $query->where('payment_status', 'unpaid')
+            ->where('created_at', '<', now()->subHours(self::PAYMENT_WINDOW_HOURS))
+            ->orderBy('created_at');
+    }
+
     /**
      * Paid orders that still need anchoring: failed ones, ones paid while Base was off, and
      * 'pending' ones whose run was cut short (older than a few minutes).

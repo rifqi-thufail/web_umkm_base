@@ -383,6 +383,20 @@ class PaymentFlowTest extends TestCase
         $this->assertSame('confirmed', $order->fresh()->blockchain_status);
     }
 
+    public function test_page_traffic_closes_abandoned_checkouts_without_cron(): void
+    {
+        [$buyer] = $this->cartWithTwoSellers();
+        $this->fakeSnap();
+        $this->actingAs($buyer)->post('/orders/process', ['payment_gateway' => 'midtrans']);
+        $this->partialMock(MidtransService::class, fn ($mock) => $mock->shouldReceive('status')->once()->andReturn(null));
+        \Illuminate\Support\Facades\Cache::flush();
+        $this->travel(2)->days();
+
+        $this->get('/bantuan')->assertOk();
+
+        $this->assertSame(['expired'], Order::pluck('payment_status')->unique()->values()->all());
+    }
+
     private function paidOrder(): Order
     {
         $buyer = User::factory()->create();
