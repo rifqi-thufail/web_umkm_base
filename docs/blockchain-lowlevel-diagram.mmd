@@ -14,7 +14,6 @@ flowchart TD
             BCS["BaseChainService\n────────────────\n• enabled(): bool\n• fingerprint(Order): array\n• anchorOrder(Order): array\n• verifyOrder(Order): array\n• recordOf(dataHash): array\n• sendTransaction(to, data): txHash\n• waitForReceipt(txHash): receipt\n• rpc(method, params): mixed\n• selector(signature): bytes4\n• recorderAddress(): string"]
             DOKU["DokuPaymentService\n• createInvoice()\n• handleWebhook()"]
             CP["CoinPaymentsService\n• createInvoice()\n• ipnHandler()"]
-            MPC["MpcWalletService\n• provisionFor(User)\n• execute(WalletTransfer)\n• refresh(WalletTransfer)\n• getBalance(address)"]
         end
 
         OC --> BCS

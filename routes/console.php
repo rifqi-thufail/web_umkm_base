@@ -8,8 +8,6 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('wallet:reconcile')->everyMinute()->withoutOverlapping();
-
 // Shared hosting (Hostinger) has no supervisor: the one cron entry `php artisan schedule:run`
 // drains the queue each minute instead of a long-running `queue:work`.
 Schedule::command('queue:work --stop-when-empty --tries=3 --max-time=50')->everyMinute()->withoutOverlapping();

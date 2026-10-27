@@ -65,4 +65,3 @@ Kartu uji Midtrans sandbox: https://docs.midtrans.com/docs/testing-payment-on-sa
 - Email (verifikasi pembeli, lupa password pembeli, form bantuan) hanya tercatat di
   `storage/logs/laravel.log` selama `MAIL_MAILER=log`. Pakai SMTP sandbox seperti Mailtrap bila
   penguji perlu menerima email.
-- Dompet MPC tidak bisa berjalan di shared hosting; halaman dompet menampilkan "belum tersedia".

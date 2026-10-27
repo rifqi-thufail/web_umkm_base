@@ -71,7 +71,7 @@ echo "==> Uploading code"
 rsync -az --delete -e "ssh -p 65002" \
   --exclude /.git --exclude /node_modules --exclude /vendor \
   --exclude /.env --exclude '/.env.*' --exclude /storage --exclude /public/storage --exclude /public/hot \
-  --exclude /mpc --exclude /blockchain --exclude /.claude --exclude '/database/*.sqlite' \
+  --exclude /blockchain --exclude /.claude --exclude '/database/*.sqlite' \
   --exclude /error_log --exclude /.phpunit.result.cache \
   ./ "$HOST:$APP_DIR/"
 
