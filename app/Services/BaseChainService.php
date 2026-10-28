@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Order;
 use GuzzleHttp\Client;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use kornrunner\Ethereum\EIP1559Transaction;
 use kornrunner\Keccak;
@@ -21,7 +22,7 @@ class BaseChainService
 
     public function __construct()
     {
-        $this->http = new Client(['timeout' => 20]);
+        $this->http = new Client(['timeout' => 10, 'connect_timeout' => 5]);
     }
 
     public function enabled(): bool
@@ -113,40 +114,60 @@ class BaseChainService
     }
 
     /**
-     * Send anchor(dataHash, orderId) to the registry and wait for the receipt.
+     * Sign and broadcast anchor(dataHash, orderId). Returns the tx hash without waiting for it to be mined.
+     *
+     * Sends are serialized with a cache lock so two webhooks never sign with the same nonce, and refused
+     * when the network fee is above BASE_MAX_FEE_GWEI or the daily anchor budget is spent, so a fee spike
+     * or a flood of (sandbox) payments cannot drain the recorder wallet.
      */
-    public function anchorOrder(Order $order): array
+    public function submitAnchor(Order $order, string $dataHash): string
     {
         if (! $this->enabled()) {
-            return ['success' => false, 'error' => 'Base anchoring is disabled or not configured'];
+            throw new RuntimeException('Base anchoring is disabled or not configured');
         }
 
-        $fingerprint = $this->fingerprint($order);
+        $budget = (int) config('blockchain.base.max_anchors_per_day');
+        $spentKey = 'base:anchors:' . now()->utc()->format('Y-m-d');
+        if ($budget > 0 && (int) Cache::get($spentKey, 0) >= $budget) {
+            throw new RuntimeException("Daily anchor budget of {$budget} reached; it will be retried tomorrow");
+        }
 
-        try {
-            $data = $this->selector('anchor(bytes32,uint64)')
-                . $this->word(substr($fingerprint['hash'], 2))
-                . $this->word(dechex($order->id));
+        $data = $this->selector('anchor(bytes32,uint64)')
+            . $this->word(substr($dataHash, 2))
+            . $this->word(dechex($order->id));
 
-            $txHash = $this->sendTransaction(config('blockchain.base.contract_address'), $data);
-            $receipt = $this->waitForReceipt($txHash);
+        $txHash = Cache::lock('base:recorder-nonce', 30)->block(25, fn () => $this->sendTransaction(config('blockchain.base.contract_address'), $data));
 
-            if (hexdec($receipt['status']) !== 1) {
-                throw new RuntimeException('Transaction reverted');
+        Cache::add($spentKey, 0, now()->addDays(2));
+        Cache::increment($spentKey);
+
+        return $txHash;
+    }
+
+    /** The mined receipt, or null while the tx is still in the mempool (or unknown to the node). */
+    public function receipt(string $txHash): ?array
+    {
+        return $this->rpc('eth_getTransactionReceipt', [$txHash]) ?: null;
+    }
+
+    /** Whether the node still knows a tx we broadcast (mined or pending). */
+    public function transactionKnown(string $txHash): bool
+    {
+        return (bool) $this->rpc('eth_getTransactionByHash', [$txHash]);
+    }
+
+    /** Poll for the receipt up to $timeoutSeconds; null if it has not been mined yet. */
+    public function waitForReceipt(string $txHash, int $timeoutSeconds = 20): ?array
+    {
+        $deadline = microtime(true) + $timeoutSeconds;
+        do {
+            if ($receipt = $this->receipt($txHash)) {
+                return $receipt;
             }
+            usleep(1_000_000);
+        } while (microtime(true) < $deadline);
 
-            return [
-                'success' => true,
-                'tx_hash' => $txHash,
-                'block_number' => hexdec($receipt['blockNumber']),
-                'data_hash' => $fingerprint['hash'],
-                'chain_id' => (int) config('blockchain.base.chain_id'),
-            ];
-        } catch (\Throwable $e) {
-            Log::error('Base anchor failed', ['order_id' => $order->id, 'error' => $e->getMessage()]);
-
-            return ['success' => false, 'error' => $e->getMessage(), 'data_hash' => $fingerprint['hash']];
-        }
+        return null;
     }
 
     /**
@@ -210,10 +231,16 @@ class BaseChainService
         $tip = hexdec($this->rpc('eth_maxPriorityFeePerGas'));
         $baseFee = hexdec($this->rpc('eth_getBlockByNumber', ['latest', false])['baseFeePerGas'] ?? '0x0');
 
+        $maxFee = $baseFee * 2 + max($tip, 1);
+        $capWei = (float) config('blockchain.base.max_fee_gwei') * 1e9;
+        if ($capWei > 0 && $maxFee > $capWei) {
+            throw new RuntimeException(sprintf('Base fee %.4f gwei is above BASE_MAX_FEE_GWEI; will retry later', $maxFee / 1e9));
+        }
+
         $tx = new EIP1559Transaction(
             $nonce,
             '0x' . dechex(max($tip, 1)),
-            '0x' . dechex($baseFee * 2 + max($tip, 1)),
+            '0x' . dechex($maxFee),
             '0x' . dechex((int) ceil($gas * 1.2)),
             $to,
             '0x0',
@@ -223,20 +250,6 @@ class BaseChainService
         $raw = $tx->getRaw($this->strip0x(config('blockchain.base.private_key')), (int) config('blockchain.base.chain_id'));
 
         return $this->rpc('eth_sendRawTransaction', ['0x' . $raw]);
-    }
-
-    protected function waitForReceipt(string $txHash, int $timeoutSeconds = 30): array
-    {
-        $deadline = microtime(true) + $timeoutSeconds;
-        do {
-            $receipt = $this->rpc('eth_getTransactionReceipt', [$txHash]);
-            if ($receipt) {
-                return $receipt;
-            }
-            usleep(500_000);
-        } while (microtime(true) < $deadline);
-
-        throw new RuntimeException("No receipt for {$txHash} after {$timeoutSeconds}s");
     }
 
     protected function rpc(string $method, array $params = []): mixed

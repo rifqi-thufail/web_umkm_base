@@ -83,7 +83,27 @@ class ProfileController extends Controller
 
         Auth::logout();
 
-        $user->delete();
+        if ($user->orders()->exists()) {
+            // Orders cascade on delete, and paid ones are the seller's books and anchored on Base.
+            // Keep the row (and its id, which is in the fingerprint) but erase everything personal.
+            if ($user->avatar) {
+                Storage::disk('public')->delete($user->avatar);
+            }
+            $user->cart()->delete();
+            $user->wishlists()->delete();
+            $user->forceFill([
+                'nama' => 'Akun dihapus',
+                'email' => 'deleted-' . $user->id . '-' . \Illuminate\Support\Str::random(12) . '@deleted.invalid',
+                'password' => \Illuminate\Support\Str::random(64),
+                'no_hp' => '-',
+                'alamat' => '-',
+                'avatar' => null,
+                'email_verified_at' => null,
+                'remember_token' => null,
+            ])->save();
+        } else {
+            $user->delete();
+        }
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();

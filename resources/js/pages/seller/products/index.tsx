@@ -41,7 +41,7 @@ export default function SellerProducts({ products }: { products: Paginated<Produ
                                     <TableRow>
                                         <TableHead>Produk</TableHead>
                                         <TableHead className="hidden sm:table-cell">Kategori</TableHead>
-                                        <TableHead className="text-right">Harga</TableHead>
+                                        <TableHead className="hidden text-right sm:table-cell">Harga</TableHead>
                                         <TableHead className="text-right">Stok</TableHead>
                                         <TableHead className="sr-only">Aksi</TableHead>
                                     </TableRow>
@@ -52,11 +52,14 @@ export default function SellerProducts({ products }: { products: Paginated<Produ
                                             <TableCell>
                                                 <Link href={route('seller.products.edit', p.id)} className="flex items-center gap-3">
                                                     <ProductImage src={p.image} alt="" className="size-10 shrink-0 rounded-md" />
-                                                    <span className="max-w-64 truncate font-medium">{p.name}</span>
+                                                    <span className="flex min-w-0 flex-col">
+                                                        <span className="max-w-40 truncate font-medium sm:max-w-64">{p.name}</span>
+                                                        <span className="text-xs text-muted-foreground tabular sm:hidden">{formatRupiah(p.price)}</span>
+                                                    </span>
                                                 </Link>
                                             </TableCell>
                                             <TableCell className="hidden text-muted-foreground sm:table-cell">{p.category}</TableCell>
-                                            <TableCell className="text-right tabular">{formatRupiah(p.price)}</TableCell>
+                                            <TableCell className="hidden text-right tabular sm:table-cell">{formatRupiah(p.price)}</TableCell>
                                             <TableCell className="text-right">
                                                 {p.stock === 0 ? <Badge variant="destructive">Habis</Badge> : p.stock < 10 ? <Badge variant="warning">{p.stock}</Badge> : <span className="tabular">{p.stock}</span>}
                                             </TableCell>

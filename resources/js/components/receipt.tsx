@@ -48,8 +48,10 @@ export function ChainSection({ chain, check }: { chain: ChainInfo; check?: Chain
             <div className="flex items-start gap-2 text-sm text-muted-foreground">
                 <BaseGlyph className="mt-0.5 size-4 opacity-50" />
                 {chain.status === 'failed'
-                    ? 'Pencatatan ke Base gagal. Tim kami akan mencobanya lagi.'
-                    : 'Sidik jari akan dicatat di Base setelah pembayaran lunas.'}
+                    ? 'Pencatatan ke Base belum berhasil. Sistem mencobanya lagi secara otomatis.'
+                    : chain.status === 'pending'
+                      ? 'Sedang dicatat di Base. Muat ulang halaman ini dalam satu menit.'
+                      : 'Sidik jari akan dicatat di Base setelah pembayaran lunas.'}
             </div>
         );
     }
@@ -121,7 +123,7 @@ export function Receipt({ order, check, className }: { order: Order; check?: Cha
             <div className="mx-5 my-5 border-t border-dashed sm:mx-7" />
 
             <div className="flex items-baseline justify-between px-5 sm:px-7">
-                <span className="text-sm text-muted-foreground">Total dibayar</span>
+                <span className="text-sm text-muted-foreground">{order.payment_status === 'paid' ? 'Total dibayar' : 'Total'}</span>
                 <span className="font-heading text-2xl font-extrabold">{formatRupiah(order.total)}</span>
             </div>
 

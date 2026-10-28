@@ -5,328 +5,319 @@ namespace App\Http\Controllers;
 use App\Models\Cart;
 use App\Models\Order;
 use App\Models\Product;
-use App\Models\OrderItem;
-use App\Services\BaseChainService;
-use App\Services\CoinPaymentsService; // Pastikan import service CoinPayments
-
+use App\Services\CoinPaymentsService;
+use App\Services\MidtransService;
+use App\Services\OrderPaymentService;
+use App\Support\Present;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Midtrans\Config;
-use Midtrans\Snap;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
 
 class OrderController extends Controller
 {
-    protected $blockchainService;
-    protected $coinPaymentsService;
-
-    // Inject kedua service ke dalam constructor
-    public function __construct(BaseChainService $blockchainService, CoinPaymentsService $coinPaymentsService) {
-        $this->blockchainService = $blockchainService;
-        $this->coinPaymentsService = $coinPaymentsService;
+    public function __construct(
+        protected MidtransService $midtrans,
+        protected CoinPaymentsService $coinPayments,
+        protected OrderPaymentService $payments,
+    ) {
     }
 
-    public function checkout() {
-        $cart = Cart::with('items.product.primaryImage', 'items.product.seller')->where('user_id', Auth::id())->first();
+    private function gateways(): array
+    {
+        return [
+            'midtrans' => $this->midtrans->configured(),
+            'coinpayments' => $this->coinPayments->configured(),
+        ];
+    }
 
-        if (!$cart || $cart->items->isEmpty()) {
-            return redirect()->route('home')->with('error', 'Keranjang Anda kosong.');
+    public function checkout()
+    {
+        $cart = Cart::with('items.product.primaryImage', 'items.product.seller')->where('user_id', Auth::id())->first();
+        $items = CartController::presentItems($cart);
+
+        if (! $items) {
+            return redirect()->route('cart.index')->with('error', 'Keranjang Anda kosong.');
         }
 
         $user = Auth::user();
 
-        return \Inertia\Inertia::render('buyer/checkout', [
-            'items' => CartController::presentItems($cart),
+        return Inertia::render('buyer/checkout', [
+            'items' => $items,
             'buyer' => [
                 'name' => $user->nama,
                 'email' => $user->email,
                 'phone' => $user->no_hp !== '-' ? $user->no_hp : null,
                 'address' => $user->alamat !== '-' ? $user->alamat : null,
             ],
-            'gateways' => [
-                'midtrans' => (bool) config('midtrans.server_key'),
-                'coinpayments' => (bool) config('services.coinpayments.client_id'),
-            ],
+            'gateways' => $this->gateways(),
         ]);
     }
 
+    /**
+     * Turn the cart into one order per seller, all charged together under one payment reference.
+     */
     public function process(Request $request)
     {
-        $user = Auth::user();
-        $cart = Cart::with('items.product.seller')->where('user_id', $user->id)->firstOrFail();
+        $gateways = array_keys(array_filter($this->gateways()));
+        $request->validate(['payment_gateway' => ['required', Rule::in($gateways)]], [
+            'payment_gateway.in' => 'Metode pembayaran ini belum tersedia.',
+            'payment_gateway.required' => 'Pilih metode pembayaran.',
+        ]);
+        $gateway = $request->input('payment_gateway');
 
-        if ($cart->items->isEmpty()) {
-            return redirect()->route('cart.index')->with('error', 'Tidak ada item di keranjang untuk di-checkout.');
+        $user = Auth::user();
+        if (! $user->alamat || $user->alamat === '-') {
+            return redirect()->route('profile.edit')->with('error', 'Isi alamat pengiriman dulu supaya penjual bisa mengirim pesanan.');
         }
 
-        // Ambil pilihan gateway dari form checkout (default ke midtrans jika kosong)
-        // Pastikan di form checkout HTML Anda ada input name="payment_gateway" value="midtrans" atau "coinpayments"
-        $selectedGateway = $request->input('payment_gateway', 'midtrans'); 
-        
-        $itemsBySeller = $cart->items->groupBy('product.seller_id');
+        $reference = 'PAY-' . Str::uuid();
 
         try {
-            $orders = DB::transaction(function () use ($user, $itemsBySeller, $selectedGateway) {
-                $createdOrders = [];
-                
-                foreach ($itemsBySeller as $sellerId => $items) {
-                    $totalPerSeller = $items->sum(function ($item) {
-                        return $item->quantity * $item->product->harga;
-                    });
+            $orders = DB::transaction(function () use ($user, $gateway, $reference) {
+                $cart = Cart::where('user_id', $user->id)->first();
+                $items = $cart?->items()->get() ?? collect();
+                if ($items->isEmpty()) {
+                    throw ValidationException::withMessages(['cart' => 'Keranjang Anda kosong.']);
+                }
 
-                    // Buat Data Pesanan
+                // Lock the products so two buyers cannot both pass the stock check for the last unit.
+                $products = Product::whereKey($items->pluck('product_id'))->lockForUpdate()->get()->keyBy('id');
+
+                $orders = collect();
+                foreach ($items->groupBy(fn ($item) => $products->get($item->product_id)?->seller_id) as $sellerId => $sellerItems) {
+                    $lines = [];
+                    foreach ($sellerItems as $item) {
+                        $product = $products->get($item->product_id);
+                        if (! $product) {
+                            throw ValidationException::withMessages(['cart' => 'Ada produk di keranjang yang sudah tidak dijual. Hapus dulu dari keranjang.']);
+                        }
+                        if ($product->stok < $item->quantity) {
+                            throw ValidationException::withMessages(['cart' => "Stok {$product->nama_produk} tinggal {$product->stok}."]);
+                        }
+                        $lines[] = ['product_id' => $product->id, 'quantity' => (int) $item->quantity, 'price' => (int) round((float) $product->harga)];
+                    }
+
                     $order = Order::create([
                         'user_id' => $user->id,
                         'seller_id' => $sellerId,
                         'order_number' => 'ORD-' . Str::uuid(),
-                        'total_price' => $totalPerSeller,
+                        'payment_reference' => $reference,
+                        'total_price' => array_sum(array_map(fn ($l) => $l['quantity'] * $l['price'], $lines)),
                         'status' => 'pending',
                         'payment_status' => 'unpaid',
-                        'payment_gateway' => $selectedGateway, // Simpan gateway yang dipilih
+                        'payment_gateway' => $gateway,
+                        'alamat_pengiriman' => $user->alamat,
                     ]);
-
-                    foreach ($items as $item) {
-                        if ($item->product->stok < $item->quantity) {
-                            throw new \Exception('Stok untuk produk ' . $item->product->nama_produk . ' tidak mencukupi.');
-                        }
-
-                        $order->items()->create([
-                            'product_id' => $item->product_id,
-                            'quantity' => $item->quantity,
-                            'price' => $item->product->harga,
-                        ]);
-                    }
-                    $createdOrders[] = $order;
+                    $order->items()->createMany($lines);
+                    $orders->push($order);
                 }
 
-                return $createdOrders;
+                return new \Illuminate\Database\Eloquent\Collection($orders->all());
             });
-            
-            $mainOrder = $orders[0];
+        } catch (ValidationException $e) {
+            return redirect()->route('cart.index')->with('error', collect($e->errors())->flatten()->first());
+        }
 
-            // ======================================================
-            // LOGIKA CABANG BERDASARKAN PAYMENT GATEWAY YANG DIPILIH
-            // ======================================================
-            
-            if ($selectedGateway === 'coinpayments') {
-                // -----------------------------
-                // PROSES VIA COINPAYMENTS (CRYPTO)
-                // -----------------------------
-                $invoice = $this->coinPaymentsService->createInvoice($mainOrder);
-
-                if (!$invoice || !isset($invoice['id'])) {
-                    throw new \Exception('Gagal membuat tagihan di CoinPayments.');
-                }
-
-                $mainOrder->snap_token = $invoice['id']; // Menyimpan ID Invoice CoinPayments
-                $mainOrder->save();
-
-                // Kosongkan cart karena sudah jadi order
-                $this->clearUserCart($user->id, $mainOrder);
-
-                // Redirect pembeli ke halaman pembayaran CoinPayments (keluar dari Inertia)
-                return \Inertia\Inertia::location($invoice['invoiceUrl']);
-
+        try {
+            if ($gateway === 'coinpayments') {
+                $invoice = $this->coinPayments->createInvoice($reference, $orders, $user);
+                $token = $invoice['id'];
             } else {
-                // -----------------------------
-                // PROSES VIA MIDTRANS (IDR)
-                // -----------------------------
-                Config::$serverKey = config('midtrans.server_key');
-                Config::$clientKey = config('midtrans.client_key');
-                Config::$isProduction = (bool) config('midtrans.is_production');
-                Config::$isSanitized = (bool) config('midtrans.is_sanitized');
-                Config::$is3ds = (bool) config('midtrans.is_3ds');
-
-                $midtrans_params = [
-                    'transaction_details' => [
-                        'order_id' => $mainOrder->order_number,
-                        'gross_amount' => (int) $mainOrder->total_price,
-                    ],
-                    'customer_details' => [
-                        'first_name' => $user->nama,
-                        'email' => $user->email,
-                        'phone' => $user->no_hp,
-                    ],
-                    'callbacks' => [
-                        'finish' => route('orders.show', $mainOrder) . '?status=success',
-                        'error' => route('orders.show', $mainOrder) . '?status=error',
-                        'unfinish' => route('orders.show', $mainOrder) . '?status=pending',
-                    ],
-                ];
-
-                $snapToken = Snap::getSnapToken($midtrans_params);
-                $mainOrder->snap_token = $snapToken;
-                $mainOrder->save();
-
-                // Kosongkan cart karena sudah jadi order
-                $this->clearUserCart($user->id, $mainOrder);
-
-                // Arahkan ke halaman pembayaran dengan membawa token Snap Midtrans
-                return \Inertia\Inertia::render('buyer/payment', [
-                    'snapToken' => $snapToken,
-                    'clientKey' => config('midtrans.client_key'),
-                    'isProduction' => (bool) config('midtrans.is_production'),
-                    'order' => \App\Support\Present::order($mainOrder->load('orderItems.product.primaryImage', 'seller')),
-                ]);
+                $token = $this->midtrans->snapToken($reference, $orders, $user);
             }
+        } catch (\Throwable $e) {
+            Log::error('Payment gateway refused the checkout', ['reference' => $reference, 'gateway' => $gateway, 'error' => $e->getMessage()]);
+            Order::whereKey($orders->modelKeys())->delete();
 
-        } catch (\Exception $e) {
-            return redirect()->route('orders.checkout')->with('error', 'Gagal memproses pesanan: ' . $e->getMessage());
+            return redirect()->route('orders.checkout')->with('error', 'Gateway pembayaran sedang tidak bisa dihubungi. Keranjang Anda masih utuh, silakan coba lagi.');
         }
+
+        Order::whereKey($orders->modelKeys())->update(['snap_token' => $token]);
+
+        Cart::where('user_id', $user->id)->first()?->items()
+            ->whereIn('product_id', $orders->flatMap(fn ($o) => $o->items->pluck('product_id')))
+            ->delete();
+
+        return redirect()->route('orders.pay', $reference);
     }
 
-    // Fungsi helper agar tidak mengulang kode penghapusan keranjang
-    private function clearUserCart($userId, $order) {
-        $cart = Cart::where('user_id', $userId)->first();
-        if($cart) {
-            $orderedProductIds = $order->items->pluck('product_id');
-            $cart->items()->whereIn('product_id', $orderedProductIds)->delete();
+    /**
+     * Payment page for a checkout. A GET route, so a refresh or "pay later" link keeps working.
+     */
+    public function pay(string $reference)
+    {
+        $orders = Order::where('payment_reference', $reference)->where('user_id', Auth::id())
+            ->with(['seller', 'orderItems.product.primaryImage'])->orderBy('id')->get();
+        abort_if($orders->isEmpty(), 404);
+
+        $first = $orders->first();
+        $this->payments->sync($first);
+        $first->refresh();
+
+        if ($first->payment_status !== 'unpaid' || ! $first->paymentWindowOpen() || ! $first->snap_token) {
+            return redirect()->route('orders.show', $first);
         }
+
+        if ($first->payment_gateway === 'coinpayments') {
+            return Inertia::location(CoinPaymentsService::checkoutUrl($first->snap_token));
+        }
+
+        return Inertia::render('buyer/payment', [
+            'snapToken' => $first->snap_token,
+            'clientKey' => config('midtrans.client_key'),
+            'isProduction' => (bool) config('midtrans.is_production'),
+            'orders' => $orders->map(fn ($o) => Present::order($o))->all(),
+            'total' => MidtransService::total($orders),
+        ]);
     }
 
-    // ======================================================
-    // WEBHOOK / CALLBACK UNTUK MIDTRANS
-    // ======================================================
     public function midtransCallback(Request $request)
     {
-        $notification_payload = $request->all();
-        Log::info('Midtrans notification received', $notification_payload);
+        $payload = $request->all();
 
-        $orderId = $notification_payload['order_id'];
-        $statusCode = $notification_payload['status_code'];
-        $grossAmount = $notification_payload['gross_amount'];
-        $signatureKey = $notification_payload['signature_key'];
+        if (! config('midtrans.server_key')) {
+            Log::critical('Midtrans notification rejected: MIDTRANS_SERVER_KEY is not configured');
 
-        $order = Order::where('order_number', $orderId)->first();
-
-        if (!$order) {
-            return response()->json(['message' => 'Order not found'], 404);
+            return response()->json(['message' => 'Not configured'], 503);
         }
 
-        $serverKey = config('midtrans.server_key');
-        $signature = hash('sha512', $orderId . $statusCode . $grossAmount . $serverKey);
+        foreach (['order_id', 'status_code', 'gross_amount', 'signature_key', 'transaction_status'] as $field) {
+            if (! is_string($payload[$field] ?? null) || $payload[$field] === '') {
+                return response()->json(['message' => "Missing {$field}"], 400);
+            }
+        }
 
-        if ($signature !== $signatureKey) {
-            Log::error('Invalid Midtrans signature', ['order_id' => $orderId]);
+        if (! $this->midtrans->validSignature($payload)) {
+            Log::warning('Invalid Midtrans signature', ['order_id' => $payload['order_id']]);
+
             return response()->json(['message' => 'Invalid signature'], 403);
         }
 
-        $transactionStatus = $notification_payload['transaction_status'];
-        $fraudStatus = $notification_payload['fraud_status'];
+        Log::info('Midtrans notification', ['order_id' => $payload['order_id'], 'status' => $payload['transaction_status']]);
 
-        if ($transactionStatus == 'capture' || $transactionStatus == 'settlement') {
-            if ($fraudStatus == 'accept') {
-                $this->processSuccessfulPayment($order);
-            }
-        } else if (in_array($transactionStatus, ['cancel', 'deny', 'expire'])) {
-            $order->update(['payment_status' => 'failed']);
+        if ($this->payments->ordersFor($payload['order_id'])->isEmpty()) {
+            return response()->json(['message' => 'Order not found'], 404);
         }
 
-        return response()->json(['message' => 'Midtrans Notification processed successfully']);
+        $this->payments->applyMidtrans($payload);
+
+        return response()->json(['message' => 'OK']);
     }
 
-    // ======================================================
-    // WEBHOOK / IPN UNTUK COINPAYMENTS
-    // ======================================================
+    /**
+     * CoinPayments webhook. After the signature check the payload only tells us which invoice to
+     * re-read; the invoice itself is fetched from the API, so a replayed body cannot settle anything.
+     */
     public function coinpaymentsCallback(Request $request)
     {
-        $payload = $request->getContent();
-        Log::info('CoinPayments IPN received', $request->all());
+        if (! $this->coinPayments->configured()) {
+            Log::critical('CoinPayments webhook rejected: COINPAYMENTS_CLIENT_ID/SECRET are not configured');
 
-        $hmacHeader = (string) $request->header('HMAC');
-        $ipnSecret = (string) config('services.coinpayments.ipn_secret'); // Buat secret ini di dashboard CoinPayments
-
-        // Fail closed: an empty key would make the HMAC computable by anyone.
-        if ($ipnSecret === '') {
-            Log::critical('CoinPayments IPN rejected: COINPAYMENTS_IPN_SECRET is not configured');
-            return response()->json(['message' => 'IPN not configured'], 503);
+            return response()->json(['message' => 'Not configured'], 503);
         }
 
-        $calculatedHmac = hash_hmac('sha512', $payload, $ipnSecret);
-
-        if (! hash_equals($calculatedHmac, $hmacHeader)) {
-            Log::error('Invalid CoinPayments IPN Signature');
+        if (! $this->coinPayments->validWebhook($request)) {
             return response()->json(['message' => 'Invalid signature'], 403);
         }
 
-        $status = intval($request->input('status'));
-        $orderNumber = $request->input('invoiceId');
+        $invoiceId = $request->input('invoice.id') ?? $request->input('invoiceId') ?? $request->input('id');
+        $order = is_string($invoiceId)
+            ? Order::where('payment_gateway', 'coinpayments')->where('snap_token', $invoiceId)->first()
+            : null;
 
-        $order = Order::where('order_number', $orderNumber)->first();
-
-        if (!$order) {
+        if (! $order) {
             return response()->json(['message' => 'Order not found'], 404);
         }
 
-        // Only orders checked out through CoinPayments may be settled by its IPN.
-        if ($order->payment_gateway !== 'coinpayments') {
-            Log::warning('CoinPayments IPN for non-CoinPayments order', ['order' => $order->order_number]);
-            return response()->json(['message' => 'Order gateway mismatch'], 409);
+        try {
+            $this->payments->applyCoinPayments($this->coinPayments->invoice($invoiceId));
+        } catch (\Throwable $e) {
+            Log::error('CoinPayments webhook: invoice lookup failed', ['invoice' => $invoiceId, 'error' => $e->getMessage()]);
+
+            return response()->json(['message' => 'Lookup failed'], 502);
         }
 
-        if ($status >= 100 || $status == 2) {
-            // Status >= 100 artinya pembayaran komplit atau selesai
-            $this->processSuccessfulPayment($order);
-        } else if ($status < 0) {
-            // Status minus artinya error/timeout
-            $order->update(['payment_status' => 'failed']);
-        }
-
-        return response()->json(['message' => 'CoinPayments IPN processed successfully']);
-    }
-
-    // ======================================================
-    // FUNGSI UTAMA PENYELESAIAN ORDER & BLOCKCHAIN
-    // ======================================================
-    protected function processSuccessfulPayment(Order $order)
-    {
-        DB::transaction(function () use (&$order) {
-            // Re-read under a row lock so overlapping webhook deliveries cannot both see 'unpaid'.
-            $order = Order::whereKey($order->id)->lockForUpdate()->first();
-
-            if ($order && $order->payment_status == 'unpaid') {
-                $order->update(['payment_status' => 'paid', 'status' => 'processing']);
-
-                foreach ($order->items as $item) {
-                    Product::find($item->product_id)->decrement('stok', $item->quantity);
-                }
-
-                // Catat sidik jari transaksi ke Base setelah pembayaran berhasil
-                $this->hashOrderToBlockchain($order);
-            }
-        });
-    }
-
-    private function hashOrderToBlockchain(Order $order): void
-    {
-        // Anchor after the payment transaction commits so a chain error never rolls back the payment.
-        DB::afterCommit(fn () => $order->anchorOnBase($this->blockchainService));
+        return response()->json(['message' => 'OK']);
     }
 
     public function index()
     {
         $orders = Order::where('user_id', Auth::id())
-                        ->with(['seller', 'orderItems.product.primaryImage'])
-                        ->latest()
-                        ->paginate(10);
+            ->with(['seller', 'orderItems.product.primaryImage'])
+            ->latest()
+            ->paginate(10);
 
-        return \Inertia\Inertia::render('buyer/orders/index', [
-            'orders' => \App\Support\Present::paginate($orders, fn ($o) => \App\Support\Present::order($o)),
+        // Settle the few newest open checkouts with the gateway (throttled per checkout).
+        $open = collect($orders->items())->where('payment_status', 'unpaid');
+        $open->unique(fn ($o) => $o->gatewayReference())->take(3)->each(fn ($o) => $this->payments->sync($o));
+        $open->each->refresh();
+
+        return Inertia::render('buyer/orders/index', [
+            'orders' => Present::paginate($orders, fn ($o) => Present::order($o)),
         ]);
     }
 
     public function show(Order $order)
     {
         if ($order->user_id !== Auth::id()) {
-            abort(403);
+            abort(404);
         }
-        $order->load(['seller', 'orderItems.product.primaryImage']);
 
-        return \Inertia\Inertia::render('buyer/orders/show', [
-            'order' => \App\Support\Present::order($order),
-            'returnStatus' => request('status'),
+        $this->payments->sync($order);
+        $order->refresh()->load(['seller', 'orderItems.product.primaryImage']);
+
+        $siblings = $order->paymentGroup()->reject(fn ($o) => $o->id === $order->id)->values();
+
+        return Inertia::render('buyer/orders/show', [
+            'order' => Present::order($order),
+            'payUrl' => $order->paymentWindowOpen() && $order->snap_token && $order->payment_reference
+                ? route('orders.pay', $order->payment_reference) : null,
+            'siblings' => $siblings->map(fn ($o) => ['id' => $o->id, 'number' => $o->order_number])->all(),
         ]);
+    }
+
+    /** Put a closed order's products back in the cart so the buyer can check out again. */
+    public function reorder(Order $order)
+    {
+        if ($order->user_id !== Auth::id()) {
+            abort(404);
+        }
+
+        $cart = Auth::user()->cart()->firstOrCreate([]);
+        $added = 0;
+        foreach ($order->orderItems()->with('product')->get() as $item) {
+            $product = $item->product;
+            if (! $product || $product->trashed() || $product->stok < 1) {
+                continue;
+            }
+            $line = $cart->items()->firstOrNew(['product_id' => $product->id]);
+            $line->quantity = min($product->stok, max((int) $line->quantity, (int) $item->quantity));
+            $line->save();
+            $added++;
+        }
+
+        return $added
+            ? redirect()->route('cart.index')->with('success', 'Produk dari pesanan ini dimasukkan lagi ke keranjang.')
+            : back()->with('error', 'Produk dari pesanan ini sudah tidak tersedia.');
+    }
+
+    /** The buyer confirms the parcel arrived. */
+    public function complete(Order $order)
+    {
+        if ($order->user_id !== Auth::id()) {
+            abort(404);
+        }
+        if ($order->payment_status !== 'paid' || $order->status !== 'shipped') {
+            return back()->with('error', 'Pesanan ini belum dikirim.');
+        }
+
+        $order->update(['status' => 'completed']);
+
+        return back()->with('success', 'Terima kasih, pesanan ditandai selesai.');
     }
 }

@@ -42,6 +42,12 @@ class BaseAnchorOrder extends Command
             return self::SUCCESS;
         }
 
+        if ($result['pending'] ?? false) {
+            $this->warn("Sent {$result['tx_hash']}, not mined yet. Run this again in a minute.");
+
+            return self::SUCCESS;
+        }
+
         if (! $result['success']) {
             $this->error('Failed: ' . $result['error']);
 
@@ -63,17 +69,15 @@ class BaseAnchorOrder extends Command
             return self::FAILURE;
         }
 
-        $orders = Order::query()
-            ->where('payment_status', 'paid')
-            ->where(fn ($q) => $q->whereNull('blockchain_status')->orWhere('blockchain_status', '!=', 'confirmed'))
-            ->orderBy('id')
-            ->get();
+        $orders = Order::awaitingAnchor()->orderBy('id')->get();
 
         $failed = 0;
         foreach ($orders as $order) {
             $result = $order->anchorOnBase($base);
             if ($result['success']) {
                 $this->line("order {$order->id}: {$result['tx_hash']}");
+            } elseif ($result['pending'] ?? false) {
+                $this->line("order {$order->id}: {$result['tx_hash']} (not mined yet)");
             } else {
                 $failed++;
                 $this->warn("order {$order->id}: {$result['error']}");

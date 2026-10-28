@@ -17,7 +17,6 @@ use App\Http\Controllers\SellerPasswordResetController;
 use App\Http\Controllers\SellerProfileController;
 use App\Http\Controllers\SellerRegisterController;
 use App\Http\Controllers\WishlistController;
-use App\Http\Controllers\WalletController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -28,10 +27,11 @@ Route::redirect('/landing', '/');
 Route::get('/products/{product}', [HomeController::class, 'show'])->name('products.show');
 
 // --- Verifikasi & transparansi (Base) ---
-Route::get('/verifikasi', [BlockchainController::class, 'verify'])->name('blockchain.verify');
+// Both pages call the Base RPC on every visit, so they are rate limited.
+Route::get('/verifikasi', [BlockchainController::class, 'verify'])->middleware('throttle:30,1')->name('blockchain.verify');
 Route::redirect('/blockchain/verify', '/verifikasi');
 Route::get('/transparansi', [PublicTransactionController::class, 'index'])->name('public.transactions.index');
-Route::get('/transparansi/{hash}', [PublicTransactionController::class, 'show'])->name('public.transactions.show');
+Route::get('/transparansi/{hash}', [PublicTransactionController::class, 'show'])->middleware('throttle:30,1')->name('public.transactions.show');
 Route::redirect('/transparency/transactions', '/transparansi');
 Route::get('/api/public/transactions', [PublicTransactionController::class, 'api'])->name('public.transactions.api');
 
@@ -62,12 +62,12 @@ Route::middleware('auth:web')->group(function () {
     Route::delete('/cart/item/{item}', [CartController::class, 'destroy'])->name('cart.destroy');
 
     Route::get('/checkout', [OrderController::class, 'checkout'])->name('orders.checkout');
-    Route::post('/orders/process', [OrderController::class, 'process'])->name('orders.process');
+    Route::post('/orders/process', [OrderController::class, 'process'])->middleware('throttle:10,1')->name('orders.process');
+    Route::get('/bayar/{reference}', [OrderController::class, 'pay'])->where('reference', 'PAY-[0-9a-f-]{36}')->name('orders.pay');
     Route::get('/riwayat-pesanan', [OrderController::class, 'index'])->name('orders.index');
     Route::get('/riwayat-pesanan/{order}', [OrderController::class, 'show'])->name('orders.show');
-
-    Route::get('/wallet', [WalletController::class, 'index'])->name('wallet.index');
-    Route::post('/wallet/send', [WalletController::class, 'send'])->middleware('throttle:wallet-send')->name('wallet.send');
+    Route::post('/riwayat-pesanan/{order}/selesai', [OrderController::class, 'complete'])->name('orders.complete');
+    Route::post('/riwayat-pesanan/{order}/pesan-ulang', [OrderController::class, 'reorder'])->name('orders.reorder');
 });
 
 // --- Penjual ---
@@ -76,7 +76,7 @@ Route::prefix('seller')->name('seller.')->group(function () {
         Route::get('login', [SellerLoginController::class, 'create'])->name('login');
         Route::post('login', [SellerLoginController::class, 'store']);
         Route::get('register', [SellerRegisterController::class, 'create'])->name('register');
-        Route::post('register', [SellerRegisterController::class, 'store']);
+        Route::post('register', [SellerRegisterController::class, 'store'])->middleware('throttle:6,1');
         Route::get('forgot-password', [SellerPasswordResetController::class, 'create'])->name('password.request');
         Route::post('forgot-password', [SellerPasswordResetController::class, 'store'])->name('password.email');
         Route::get('reset-password', [SellerPasswordResetController::class, 'edit'])->name('password.reset');
@@ -100,6 +100,7 @@ Route::prefix('seller')->name('seller.')->group(function () {
 
         Route::middleware('seller.active')->group(function () {
             Route::get('/orders', [SellerOrderController::class, 'index'])->name('orders.index');
+            Route::post('/orders/{order}/ship', [SellerOrderController::class, 'ship'])->name('orders.ship');
         });
     });
 });

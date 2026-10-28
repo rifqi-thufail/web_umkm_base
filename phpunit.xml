@@ -30,6 +30,14 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
-        <env name="MPC_WALLET_ENABLED" value="false"/>
+        <!-- Never let a test reach a real chain or payment gateway, whatever .env says. -->
+        <env name="BASE_ENABLED" value="false" force="true"/>
+        <env name="BASE_RPC_URL" value="http://127.0.0.1:1" force="true"/>
+        <env name="BASE_RECORDER_PRIVATE_KEY" value="" force="true"/>
+        <env name="MIDTRANS_SERVER_KEY" value="" force="true"/>
+        <env name="MIDTRANS_CLIENT_KEY" value="" force="true"/>
+        <env name="MIDTRANS_IS_PRODUCTION" value="false" force="true"/>
+        <env name="COINPAYMENTS_CLIENT_ID" value="" force="true"/>
+        <env name="COINPAYMENTS_CLIENT_SECRET" value="" force="true"/>
     </php>
 </phpunit>

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,6 +12,9 @@ use Illuminate\Support\Facades\Auth;
 
 class Product extends Model
 {
+    // Paid orders reference their products, so a seller's "delete" only hides the product.
+    use SoftDeletes;
+
     protected $fillable = [
         'seller_id', 
         'category_id', 

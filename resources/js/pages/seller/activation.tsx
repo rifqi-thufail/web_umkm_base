@@ -33,8 +33,8 @@ export default function Activation({ activation, config, isActive }: Props) {
                             {activation.can_receive_payments ? <Badge variant="success">Aktif</Badge> : <Badge variant="warning">Belum aktif</Badge>}
                         </div>
                         <p className="max-w-prose text-muted-foreground">
-                            Hubungkan akun Midtrans toko agar uang dari pembeli masuk langsung ke rekening koperasi. Kuncinya ada di Dashboard Midtrans,
-                            menu Settings → Access Keys.
+                            Simpan kunci akun Midtrans koperasi Anda. Untuk saat ini semua pembayaran pembeli diproses lewat akun Midtrans AMPUH,
+                            belum langsung ke rekening koperasi. Kuncinya ada di Dashboard Midtrans, menu Settings → Access Keys.
                         </p>
                     </div>
 

@@ -37,10 +37,10 @@ return [
 
     // Read through config() so the values survive `php artisan optimize` (config:cache).
     'coinpayments' => [
-        'api_url' => env('COINPAYMENTS_API_URL'),
+        // API v2. Requests and webhooks are both signed with the client secret.
+        'api_url' => env('COINPAYMENTS_API_URL', 'https://a-api.coinpayments.net'),
         'client_id' => env('COINPAYMENTS_CLIENT_ID'),
         'client_secret' => env('COINPAYMENTS_CLIENT_SECRET'),
-        'ipn_secret' => env('COINPAYMENTS_IPN_SECRET'),
     ],
 
 ];

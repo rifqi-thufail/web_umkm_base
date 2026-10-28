@@ -90,6 +90,7 @@ class Present
             'payment_status_label' => $o->payment_status_label,
             'gateway' => $o->payment_gateway,
             'created_at' => $o->created_at?->toISOString(),
+            'paid_at' => $o->paid_at?->toISOString(),
             'seller' => $o->relationLoaded('seller') && $o->seller
                 ? ['id' => $o->seller->id, 'name' => $o->seller->nama_koperasi] : null,
             'buyer' => $o->relationLoaded('user') && $o->user
@@ -114,7 +115,8 @@ class Present
     public static function chain(Order $o): array
     {
         return [
-            'status' => $o->blockchain_status,
+            // Unpaid orders are never anchored; the column's 'pending' default would read as "in progress".
+            'status' => $o->payment_status === 'paid' ? $o->blockchain_status : null,
             'tx_hash' => $o->blockchain_hash,
             'data_hash' => $o->transaction_data_hash,
             'block' => $o->block_number,

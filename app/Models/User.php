@@ -59,7 +59,6 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'wallet_connected_at' => 'datetime',
         ];
     }
 
@@ -85,20 +84,5 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(\App\Models\Product::class, 'wishlists')
                     ->withTimestamps();
-    }
-
-    public function walletTransfersSent()
-    {
-        return $this->hasMany(WalletTransfer::class, 'sender_id');
-    }
-
-    public function walletTransfersReceived()
-    {
-        return $this->hasMany(WalletTransfer::class, 'recipient_id');
-    }
-
-    public function hasWallet(): bool
-    {
-        return ! empty($this->wallet_address);
     }
 }

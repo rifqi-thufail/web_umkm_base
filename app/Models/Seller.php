@@ -36,6 +36,7 @@ class Seller extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'server_key',
     ];
 
     protected function casts(): array
@@ -44,6 +45,7 @@ class Seller extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'server_key' => 'encrypted',
         ];
     }
 

@@ -42,7 +42,7 @@ class WishlistController extends Controller
      */
     public function toggle(Request $request)
     {
-        $request->validate(['product_id' => 'required|exists:products,id']);
+        $request->validate(['product_id' => ['required', \Illuminate\Validation\Rule::exists('products', 'id')->whereNull('deleted_at')]]);
 
         $existing = Wishlist::where('user_id', Auth::id())->where('product_id', $request->product_id)->first();
 

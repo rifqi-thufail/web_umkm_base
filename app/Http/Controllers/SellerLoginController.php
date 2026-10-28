@@ -29,12 +29,22 @@ class SellerLoginController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        // Coba otentikasi menggunakan guard 'seller'
+        // Same lockout as the buyer login: 5 wrong passwords per phone number and IP.
+        $throttleKey = 'seller-login:' . \Illuminate\Support\Str::lower((string) $request->input('no_hp')) . '|' . $request->ip();
+        if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($throttleKey, 5)) {
+            $seconds = \Illuminate\Support\Facades\RateLimiter::availableIn($throttleKey);
+            throw ValidationException::withMessages([
+                'no_hp' => __('auth.throttle', ['seconds' => $seconds, 'minutes' => ceil($seconds / 60)]),
+            ]);
+        }
+
         if (! Auth::guard('seller')->attempt($request->only('no_hp', 'password'), $request->boolean('remember'))) {
+            \Illuminate\Support\Facades\RateLimiter::hit($throttleKey);
             throw ValidationException::withMessages([
                 'no_hp' => __('auth.failed'),
             ]);
         }
+        \Illuminate\Support\Facades\RateLimiter::clear($throttleKey);
 
         $request->session()->regenerate();
 

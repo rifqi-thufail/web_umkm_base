@@ -8,9 +8,14 @@ import { cn } from '@/lib/utils';
 import type { ChainInfo } from '@/types';
 
 /** The Base logo: a blue disc with a flat bite. Only used next to on-chain facts. */
-export function BaseGlyph({ className }: { className?: string }) {
+export function BaseGlyph({ className, label }: { className?: string; label?: string }) {
     return (
-        <svg viewBox="0 0 24 24" aria-hidden className={cn('size-3.5 shrink-0', className)}>
+        <svg
+            viewBox="0 0 24 24"
+            {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}
+            className={cn('size-3.5 shrink-0', className)}
+        >
+            {label && <title>{label}</title>}
             <circle cx="12" cy="12" r="12" fill="var(--chain)" />
             <path d="M11.9 19.2a7.2 7.2 0 1 0-7.1-8.1h9.4v1.9H4.8a7.2 7.2 0 0 0 7.1 6.2Z" fill="var(--chain-foreground)" />
         </svg>
